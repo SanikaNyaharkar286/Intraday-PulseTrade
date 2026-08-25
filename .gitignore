@@ -231,6 +231,7 @@ credentials/*
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+terraform/terraform.tfvars
 crash.log
 override.tf
 override.tf.json
