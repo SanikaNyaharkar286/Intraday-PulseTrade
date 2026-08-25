@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+credentials/*
+!credentials/.gitkeep
+!credentials/README.md
+*-key.json
+*service-account*.json
+*credentials*.json
+*.pem
+
+# --- Terraform ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
