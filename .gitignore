@@ -227,6 +227,10 @@ credentials/*
 
 # --- Terraform ---
 **/.terraform/*
+terraform/*/terraform.tfvars
+terraform/*/.terraform/
+terraform/*/*.tfstate
+terraform/*/*.tfstate.*
 *.tfstate
 *.tfstate.*
 *.tfvars
