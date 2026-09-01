@@ -88,10 +88,15 @@ BQ_AUDIT_TABLE = os.getenv(
     "ingestion_audit"
 )
 
+
+# ==========================================================
+# BRONZE PROCESSING
+# ==========================================================
+
 BRONZE_MAX_WORKERS = int(
     os.getenv(
         "BRONZE_MAX_WORKERS",
-        "4"
+        "6"
     )
 )
 
@@ -109,6 +114,11 @@ BRONZE_BATCH_SIZE = int(
     )
 )
 
+
+# ==========================================================
+# HISTORICAL DATA RANGE
+# ==========================================================
+
 BRONZE_HISTORICAL_END_YEAR = int(
     os.getenv(
         "BRONZE_HISTORICAL_END_YEAR",
@@ -120,5 +130,32 @@ BRONZE_HISTORICAL_END_MONTH = int(
     os.getenv(
         "BRONZE_HISTORICAL_END_MONTH",
         "2"
+    )
+)
+
+
+# ==========================================================
+# LAPTOP BATCH ASSIGNMENT
+#
+# Each laptop gets a fixed range of batches.
+#
+# Laptop 1 → 1 to 37
+# Laptop 2 → 38 to 74
+# Laptop 3 → 75 to 111
+#
+# Change these values in .env on each laptop.
+# ==========================================================
+
+BRONZE_START_BATCH = int(
+    os.getenv(
+        "BRONZE_START_BATCH",
+        "1"
+    )
+)
+
+BRONZE_END_BATCH = int(
+    os.getenv(
+        "BRONZE_END_BATCH",
+        "111"
     )
 )
