@@ -1,4 +1,4 @@
-from google.cloud import bigquery
+"""from google.cloud import bigquery
 
 
 # ==========================================================
@@ -115,5 +115,54 @@ AUDIT_SCHEMA = [
         "error_message",
         "STRING",
         mode="NULLABLE"
+    ),
+]"""
+
+
+from google.cloud import bigquery
+
+
+BRONZE_SCHEMA = [
+
+    bigquery.SchemaField(
+        "date",
+        "DATETIME",
+        mode="REQUIRED"
+    ),
+
+    bigquery.SchemaField(
+        "open",
+        "FLOAT64",
+        mode="NULLABLE"
+    ),
+
+    bigquery.SchemaField(
+        "high",
+        "FLOAT64",
+        mode="NULLABLE"
+    ),
+
+    bigquery.SchemaField(
+        "low",
+        "FLOAT64",
+        mode="NULLABLE"
+    ),
+
+    bigquery.SchemaField(
+        "close",
+        "FLOAT64",
+        mode="NULLABLE"
+    ),
+
+    bigquery.SchemaField(
+        "volume",
+        "FLOAT64",
+        mode="NULLABLE"
+    ),
+
+    bigquery.SchemaField(
+        "symbol",
+        "STRING",
+        mode="REQUIRED"
     ),
 ]

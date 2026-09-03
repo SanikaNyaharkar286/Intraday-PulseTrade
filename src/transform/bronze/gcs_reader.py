@@ -116,7 +116,7 @@ def get_test_file():
         }
     ]"""
 
-import re
+"""import re
 
 from google.cloud import storage
 
@@ -262,4 +262,223 @@ def get_historical_files():
         key=lambda x: x["object_name"]
     )
 
+    return files"""
+
+from google.cloud import storage
+import os
+
+from src.utils.config import (
+    GCP_PROJECT_ID,
+    GCS_BUCKET_NAME,
+    SOURCE_FILE_SUFFIX,
+    NEW_FILE_SUFFIX,
+)
+
+
+# ==========================================================
+# GCS CLIENT
+# ==========================================================
+
+client = storage.Client(
+    project=GCP_PROJECT_ID
+)
+
+
+# ==========================================================
+# GET BUCKET
+# ==========================================================
+
+def get_bucket():
+
+    return client.bucket(
+        GCS_BUCKET_NAME
+    )
+
+
+# ==========================================================
+# EXTRACT SYMBOL
+# ==========================================================
+
+def extract_symbol(
+    file_name: str
+) -> str:
+
+    base_name = os.path.basename(
+        file_name
+    )
+
+    # ------------------------------------------------------
+    # Normal file
+    # Example:
+    # AREM_minute.csv
+    #       ↓
+    # AREM
+    # ------------------------------------------------------
+
+    if base_name.endswith(
+        SOURCE_FILE_SUFFIX
+    ):
+
+        return base_name[
+            :-len(SOURCE_FILE_SUFFIX)
+        ]
+
+    # ------------------------------------------------------
+    # Additional file
+    # Example:
+    # AREM_minute_new.csv
+    #       ↓
+    # AREM
+    # ------------------------------------------------------
+
+    if base_name.endswith(
+        NEW_FILE_SUFFIX
+    ):
+
+        return base_name[
+            :-len(NEW_FILE_SUFFIX)
+        ]
+
+    raise ValueError(
+        f"Unsupported file name: {file_name}"
+    )
+
+
+# ==========================================================
+# DISCOVER SOURCE FILES
+# ==========================================================
+
+def get_historical_files():
+
+    bucket = get_bucket()
+
+    files = []
+
+    for blob in bucket.list_blobs():
+
+        file_name = blob.name
+
+        # --------------------------------------------------
+        # Ignore folders
+        # --------------------------------------------------
+
+        if file_name.endswith("/"):
+            continue
+
+        # --------------------------------------------------
+        # Accept normal minute files
+        # OR additional _new files
+        # --------------------------------------------------
+
+        if not (
+            file_name.endswith(
+                SOURCE_FILE_SUFFIX
+            )
+            or
+            file_name.endswith(
+                NEW_FILE_SUFFIX
+            )
+        ):
+            continue
+
+        symbol = extract_symbol(
+            file_name
+        )
+        files.append({
+
+        "uri":
+            f"gs://{GCS_BUCKET_NAME}/"
+            f"{file_name}",
+
+        "source_file":
+            file_name,
+
+        "symbol":
+            symbol,
+        })
+
+    # ------------------------------------------------------
+    # Sort for deterministic batching
+    # ------------------------------------------------------
+
+    files.sort(
+    key=lambda x: (
+        x["symbol"],
+        x["source_file"]
+    )
+    )
+
     return files
+
+
+# ==========================================================
+# SOURCE INVENTORY
+# ==========================================================
+
+def print_source_inventory():
+
+    files = get_historical_files()
+
+    normal_files = [
+        f for f in files
+        if f["source_file"].endswith(
+            SOURCE_FILE_SUFFIX
+        )
+    ]
+
+    new_files = [
+        f for f in files
+        if f["source_file"].endswith(
+            NEW_FILE_SUFFIX
+        )
+    ]
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        "GCS SOURCE INVENTORY"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    print(
+        f"Bucket: "
+        f"gs://{GCS_BUCKET_NAME}/"
+    )
+
+    print(
+        f"Total files: "
+        f"{len(files)}"
+    )
+
+    print(
+        f"Normal files: "
+        f"{len(normal_files)}"
+    )
+
+    print(
+        f"Additional _new files: "
+        f"{len(new_files)}"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    return files
+
+if __name__ == "__main__":
+
+    files = print_source_inventory()
+
+    print("\nFirst 10 files:\n")
+
+    for file_info in files[:10]:
+
+        print(
+            file_info
+        )

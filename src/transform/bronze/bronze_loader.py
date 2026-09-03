@@ -1,5 +1,5 @@
 from google.cloud import bigquery
-
+import uuid
 from src.utils.config import (
     GCP_PROJECT_ID,
     BQ_BRONZE_DATASET,
@@ -58,7 +58,7 @@ def create_bronze_table():
     )
 
     # ------------------------------------------------------
-    # Cluster by stock symbol
+    # Cluster by symbol
     # ------------------------------------------------------
 
     table.clustering_fields = [
@@ -74,7 +74,7 @@ def create_bronze_table():
 # ==========================================================
 # LOAD ONE GCS FILE
 # ==========================================================
-
+import uuid
 def load_one_file(
     gcs_uri: str,
     symbol: str
@@ -82,10 +82,15 @@ def load_one_file(
 
     table_id = get_table_id()
 
+    # ------------------------------------------------------
+    # Unique staging table for this symbol
+    # ------------------------------------------------------
+
     staging_table_id = (
-        f"{GCP_PROJECT_ID}."
-        f"{BQ_BRONZE_DATASET}."
-        f"_staging_{symbol.lower()}"
+    f"{GCP_PROJECT_ID}."
+    f"{BQ_BRONZE_DATASET}."
+    f"_staging_{symbol.lower()}_"
+    f"{uuid.uuid4().hex[:8]}"
     )
 
     print(
@@ -96,7 +101,8 @@ def load_one_file(
     try:
 
         # ==================================================
-        # 1. GCS → STAGING
+        # STAGE 1
+        # GCS → BIGQUERY STAGING
         # ==================================================
 
         staging_job_config = (
@@ -173,39 +179,65 @@ def load_one_file(
         )
 
         # ==================================================
-        # 2. COUNT ONLY NEW ROWS
+        # STAGE 2
+        # COUNT NEW RECORDS
+        # ==================================================
+        #
+        # We calculate this BEFORE the MERGE.
+        #
+        # Existing:
+        #   symbol + date already in Bronze
+        #   → don't count
+        #
+        # New:
+        #   symbol + date not in Bronze
+        #   → count
+        #
         # ==================================================
 
         count_query = f"""
-            SELECT
-                COUNT(*) AS row_count
+    SELECT
+        COUNT(*) AS new_row_count
 
-            FROM `{staging_table_id}` AS source
+    FROM
+    (
+        SELECT DISTINCT
 
-            WHERE NOT EXISTS
-            (
-                SELECT 1
+            SAFE.PARSE_DATETIME(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(source.date)
+            ) AS parsed_date
 
-                FROM `{table_id}` AS target
+        FROM `{staging_table_id}` source
 
-                WHERE target.symbol = @symbol
+        WHERE SAFE.PARSE_DATETIME(
+            '%Y-%m-%d %H:%M:%S',
+            TRIM(source.date)
+        ) IS NOT NULL
+    ) source
 
-                AND target.date =
-                    PARSE_DATETIME(
-                        '%Y-%m-%d %H:%M:%S',
-                        TRIM(source.date)
-                    )
-            )
-        """
+    WHERE NOT EXISTS
+    (
+        SELECT 1
 
+        FROM `{table_id}` target
+
+        WHERE target.symbol = @symbol
+
+        AND target.date =
+            source.parsed_date
+    )
+"""
         count_config = (
             bigquery.QueryJobConfig(
                 query_parameters=[
+
                     bigquery.ScalarQueryParameter(
                         "symbol",
                         "STRING",
                         symbol
                     )
+
                 ]
             )
         )
@@ -226,7 +258,7 @@ def load_one_file(
         )
 
         new_row_count = int(
-            count_result.row_count
+            count_result.new_row_count
         )
 
         print(
@@ -235,93 +267,141 @@ def load_one_file(
         )
 
         # ==================================================
-        # 3. MERGE INTO BRONZE
+        # STAGE 3
+        # STAGING → BRONZE
+        # ==================================================
+        #
+        # MERGE protects us from duplicate records.
+        #
+        # Unique business key:
+        #
+        #       symbol + date
+        #
+        # MATCHED:
+        #       do nothing
+        #
+        # NOT MATCHED:
+        #       insert
+        #
         # ==================================================
 
         merge_query = f"""
-            MERGE `{table_id}` AS target
 
-            USING
-            (
-                SELECT
+    MERGE `{table_id}` AS target
 
-                    PARSE_DATETIME(
-                        '%Y-%m-%d %H:%M:%S',
-                        TRIM(date)
-                    ) AS date,
+    USING
+    (
+        SELECT
+            date,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            symbol
 
-                    SAFE_CAST(
-                        TRIM(open)
-                        AS FLOAT64
-                    ) AS open,
+        FROM
+        (
+            SELECT
 
-                    SAFE_CAST(
-                        TRIM(high)
-                        AS FLOAT64
-                    ) AS high,
+                SAFE.PARSE_DATETIME(
+                    '%Y-%m-%d %H:%M:%S',
+                    TRIM(date)
+                ) AS date,
 
-                    SAFE_CAST(
-                        TRIM(low)
-                        AS FLOAT64
-                    ) AS low,
+                SAFE_CAST(
+                    TRIM(open)
+                    AS FLOAT64
+                ) AS open,
 
-                    SAFE_CAST(
-                        TRIM(close)
-                        AS FLOAT64
-                    ) AS close,
+                SAFE_CAST(
+                    TRIM(high)
+                    AS FLOAT64
+                ) AS high,
 
-                    SAFE_CAST(
-                        TRIM(volume)
-                        AS FLOAT64
-                    ) AS volume
+                SAFE_CAST(
+                    TRIM(low)
+                    AS FLOAT64
+                ) AS low,
 
-                FROM `{staging_table_id}`
+                SAFE_CAST(
+                    TRIM(close)
+                    AS FLOAT64
+                ) AS close,
 
-                QUALIFY ROW_NUMBER() OVER
+                SAFE_CAST(
+                    TRIM(volume)
+                    AS FLOAT64
+                ) AS volume,
+
+                @symbol AS symbol,
+
+                ROW_NUMBER() OVER
                 (
-                    PARTITION BY date
-                    ORDER BY date
-                ) = 1
+                    PARTITION BY
+                        SAFE.PARSE_DATETIME(
+                            '%Y-%m-%d %H:%M:%S',
+                            TRIM(date)
+                        )
 
-            ) AS source
+                    ORDER BY
+                        SAFE.PARSE_DATETIME(
+                            '%Y-%m-%d %H:%M:%S',
+                            TRIM(date)
+                        )
+                ) AS row_num
 
-            ON
-                target.symbol = @symbol
-                AND target.date = source.date
+            FROM `{staging_table_id}`
 
-            WHEN NOT MATCHED THEN
+            WHERE SAFE.PARSE_DATETIME(
+                '%Y-%m-%d %H:%M:%S',
+                TRIM(date)
+            ) IS NOT NULL
+        )
 
-                INSERT
-                (
-                    date,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                    symbol
-                )
+        WHERE row_num = 1
 
-                VALUES
-                (
-                    source.date,
-                    source.open,
-                    source.high,
-                    source.low,
-                    source.close,
-                    source.volume,
-                    @symbol
-                )
-        """
+    ) AS source
 
+    ON target.symbol = source.symbol
+
+    AND target.date = source.date
+
+    WHEN NOT MATCHED THEN
+
+        INSERT
+        (
+            date,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            symbol
+        )
+
+        VALUES
+        (
+            source.date,
+            source.open,
+            source.high,
+            source.low,
+            source.close,
+            source.volume,
+            source.symbol
+        )
+
+"""
         merge_config = (
             bigquery.QueryJobConfig(
                 query_parameters=[
+
                     bigquery.ScalarQueryParameter(
                         "symbol",
                         "STRING",
                         symbol
                     )
+
                 ]
             )
         )
@@ -342,29 +422,25 @@ def load_one_file(
         )
 
         # ==================================================
-        # 4. RETURN RESULT
+        # RESULT
         # ==================================================
 
         return {
 
-            "status":
-                "SUCCESS",
+            "status": "SUCCESS",
 
-            "symbol":
-                symbol,
+            "symbol": symbol,
 
-            "gcs_uri":
-                gcs_uri,
+            "gcs_uri": gcs_uri,
 
-            "row_count":
-                new_row_count,
+            "row_count": new_row_count,
 
         }
 
     finally:
 
         # ==================================================
-        # 5. ALWAYS CLEAN STAGING TABLE
+        # CLEANUP STAGING TABLE
         # ==================================================
 
         print(

@@ -1,5 +1,6 @@
-from google.cloud import bigquery
+from datetime import datetime, timezone
 
+from google.cloud import bigquery
 
 from src.utils.config import (
     GCP_PROJECT_ID,
@@ -7,6 +8,10 @@ from src.utils.config import (
     BQ_AUDIT_TABLE,
 )
 
+
+# ==========================================================
+# BIGQUERY CLIENT
+# ==========================================================
 
 client = bigquery.Client(
     project=GCP_PROJECT_ID
@@ -16,7 +21,11 @@ client = bigquery.Client(
 # ==========================================================
 # AUDIT TABLE ID
 # ==========================================================
-
+AUDIT_TABLE = (
+    f"{GCP_PROJECT_ID}."
+    f"{BQ_AUDIT_DATASET}."
+    f"{BQ_AUDIT_TABLE}"
+)
 def get_audit_table_id():
 
     return (
@@ -34,82 +43,73 @@ def create_audit_table():
 
     table_id = get_audit_table_id()
 
+    schema = [
+
+        bigquery.SchemaField(
+            "batch_id",
+            "STRING",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "source_file",
+            "STRING",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "source_gcs_uri",
+            "STRING",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "symbol",
+            "STRING",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "attempt_number",
+            "INT64",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "status",
+            "STRING",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "row_count",
+            "INT64",
+            mode="NULLABLE"
+        ),
+
+        bigquery.SchemaField(
+            "started_at",
+            "TIMESTAMP",
+            mode="REQUIRED"
+        ),
+
+        bigquery.SchemaField(
+            "completed_at",
+            "TIMESTAMP",
+            mode="NULLABLE"
+        ),
+
+        bigquery.SchemaField(
+            "error_message",
+            "STRING",
+            mode="NULLABLE"
+        ),
+    ]
+
     table = bigquery.Table(
         table_id,
-        schema=[
-
-            bigquery.SchemaField(
-                "batch_id",
-                "STRING",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "source_file",
-                "STRING",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "source_gcs_uri",
-                "STRING",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "symbol",
-                "STRING",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "attempt_number",
-                "INT64",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "status",
-                "STRING",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "row_count",
-                "INT64"
-            ),
-
-            bigquery.SchemaField(
-                "started_at",
-                "TIMESTAMP",
-                mode="REQUIRED"
-            ),
-
-            bigquery.SchemaField(
-                "completed_at",
-                "TIMESTAMP"
-            ),
-
-            bigquery.SchemaField(
-                "error_message",
-                "STRING"
-            ),
-        ]
+        schema=schema
     )
-
-    table.time_partitioning = (
-        bigquery.TimePartitioning(
-            type_=(
-                bigquery.TimePartitioningType.DAY
-            ),
-            field="started_at"
-        )
-    )
-
-    table.clustering_fields = [
-        "status",
-        "symbol"
-    ]
 
     return client.create_table(
         table,
@@ -118,60 +118,49 @@ def create_audit_table():
 
 
 # ==========================================================
-# WRITE AUDIT
+# WRITE AUDIT RECORD
 # ==========================================================
 
 def write_audit_record(
-    batch_id,
-    source_file,
-    source_gcs_uri,
-    symbol,
-    attempt_number,
-    status,
-    row_count,
-    started_at,
-    completed_at=None,
-    error_message=None,
+    batch_id: str,
+    source_file: str,
+    source_gcs_uri: str,
+    symbol: str,
+    attempt_number: int,
+    status: str,
+    row_count: int | None,
+    started_at: datetime,
+    completed_at: datetime | None = None,
+    error_message: str | None = None,
 ):
 
     table_id = get_audit_table_id()
 
     row = {
 
-        "batch_id":
-            batch_id,
+        "batch_id": batch_id,
 
-        "source_file":
-            source_file,
+        "source_file": source_file,
 
-        "source_gcs_uri":
-            source_gcs_uri,
+        "source_gcs_uri": source_gcs_uri,
 
-        "symbol":
-            symbol,
+        "symbol": symbol,
 
-        "attempt_number":
-            attempt_number,
+        "attempt_number": attempt_number,
 
-        "status":
-            status,
+        "status": status,
 
-        "row_count":
-            row_count,
+        "row_count": row_count,
 
-        "started_at":
-            started_at.isoformat()
-            if started_at
-            else None,
+        "started_at": started_at.isoformat(),
 
-        "completed_at":
+        "completed_at": (
             completed_at.isoformat()
             if completed_at
-            else None,
+            else None
+        ),
 
-        "error_message":
-            error_message,
-
+        "error_message": error_message,
     }
 
     errors = client.insert_rows_json(
@@ -182,30 +171,35 @@ def write_audit_record(
     if errors:
 
         raise RuntimeError(
-            f"Audit insert failed: {errors}"
+            f"Failed to write audit record: "
+            f"{errors}"
         )
+def get_successful_files() -> set[str]:
+    """
+    Return all GCS URIs that have already been loaded
+    successfully into Bronze.
 
-
-# ==========================================================
-# SUCCESSFUL FILES
-# ==========================================================
-
-def get_successful_files():
-
-    table_id = get_audit_table_id()
-
-    query = f"""
-        SELECT DISTINCT
-            source_gcs_uri
-        FROM `{table_id}`
-        WHERE status = 'SUCCESS'
+    Used by historical_runner.py for resume support.
     """
 
-    results = client.query(
-        query
-    ).result()
+    query = f"""
+    SELECT DISTINCT
+        source_gcs_uri
+    FROM `{AUDIT_TABLE}`
+    WHERE status = 'SUCCESS'
+      AND source_gcs_uri IS NOT NULL
+    """
 
-    return {
+    query_job = client.query(
+        query
+    )
+
+    rows = query_job.result()
+
+    successful_files = {
         row.source_gcs_uri
-        for row in results
+        for row in rows
+        if row.source_gcs_uri
     }
+
+    return successful_files
