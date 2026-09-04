@@ -21,6 +21,7 @@ Stored procedures are used for Silver and Gold because:
 
 - BigQuery can process large historical data faster than Python loops.
 - The same SQL can be reused for historical and incremental loads.
+- For incremental uploads, Python renders symbol/date scope filters before creating the Silver and Gold procedures.
 - A procedure keeps all transformation steps in one controlled sequence.
 - Each procedure can be safely called again because tables use `MERGE`.
 - The pipeline is easier to debug because each layer has one main procedure.
@@ -618,7 +619,7 @@ What it does:
 - Creates a stable `stock_key` using `FARM_FINGERPRINT(symbol)`.
 - Inserts new symbols into `dim_stock`.
 - Leaves company, sector, and industry as `NULL`.
-- Sets exchange to `NSE`.
+- Leaves exchange as `NULL` until a real reference table is added.
 
 Why it is used:
 
@@ -647,7 +648,7 @@ What it does:
 - Inserts the supported timeframes:
   - `1M`
   - `5M`
-  - `DAILY`
+- Deletes unsupported timeframe rows left by older runs.
 
 Why it is used:
 
@@ -666,6 +667,8 @@ What it writes:
 
 - OHLCV data.
 - Silver technical indicators.
+- `bar_return_pct`, which is current close versus previous intraday close.
+- `day_return_pct`, which is current close versus previous trading-day close.
 - Gold business fields.
 
 Business fields added:
@@ -768,7 +771,7 @@ Why each signal is used:
 - `EMA_BEARISH_CROSSOVER`: EMA 9 crosses below EMA 20.
 - `MACD_BULLISH_CROSSOVER`: MACD crosses above signal line.
 - `MACD_BEARISH_CROSSOVER`: MACD crosses below signal line.
-- `VOLUME_BREAKOUT`: relative volume is greater than 2.
+- `VOLUME_BREAKOUT`: relative volume crosses above 2 from a previous value at or below 2.
 
 The procedure creates `signal_id` with:
 
@@ -790,6 +793,7 @@ Important note:
 What it does:
 
 - Inserts new signal events.
+- Removes stale `VOLUME_BREAKOUT` rows that no longer meet crossing logic.
 - Does not update old signals.
 - Does not insert duplicates because it matches on `signal_id`.
 
@@ -949,9 +953,9 @@ CSV uploaded to bucket
   -> incremental_loader.run_incremental()
   -> bronze.process_new_file()
   -> bronze table MERGE
-  -> silver.run_silver_pipeline()
+  -> silver.run_silver_pipeline(scope_symbol, scope_start, scope_end)
   -> CALL sp_bronze_to_silver()
-  -> gold.run_gold_pipeline()
+  -> gold.run_gold_pipeline(scope_symbol, scope_start, scope_end)
   -> CALL sp_silver_to_gold()
   -> refresh semantic views
 ```

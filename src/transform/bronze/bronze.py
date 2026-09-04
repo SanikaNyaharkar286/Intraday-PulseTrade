@@ -582,7 +582,7 @@ def process_historical_month(
                     _FILE_NAME,
                     r'/([^/]+)\\.csv$'
                 ),
-                r'_\d{4}-\d{2}-\d{2}$',
+                r'_\\d{4}-\\d{2}-\\d{2}$',
                 ''
             ) AS symbol
 
@@ -762,7 +762,7 @@ def process_new_file(file_path):
                     _FILE_NAME,
                     r'/([^/]+)\\.csv$'
                 ),
-                r'_\d{4}-\d{2}-\d{2}$',
+                r'_\\d{4}-\\d{2}-\\d{2}$',
                 ''
             ) AS symbol
 

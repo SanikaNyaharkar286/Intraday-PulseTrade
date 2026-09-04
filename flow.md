@@ -140,20 +140,23 @@ src/transform/bronze/bronze.py
     -> extracts symbol from CSV file name
     -> removes trailing _YYYY-MM-DD from symbol names when present
     -> merges staging rows into Bronze using symbol + timestamp
+    -> reads staged symbol and timestamp range
     -> writes Bronze audit record
     -> deletes temporary external/staging tables
-    -> calls _run_silver_pipeline()
+    -> calls _run_silver_pipeline(scope_symbol, scope_start, scope_end)
 
 src/transform/silver/silver.py
-  run_silver_pipeline()
+  run_silver_pipeline(scope_symbol, scope_start, scope_end)
     -> deletes old generated Silver timestamp tables if they still use UTC TIMESTAMP
     -> creates or updates Silver tables/procedure
+    -> renders scoped Bronze filters for incremental uploads
     -> calls sp_bronze_to_silver()
-    -> calls run_gold_pipeline()
+    -> calls run_gold_pipeline(scope_symbol, scope_start, scope_end)
 
 src/transform/gold/gold.py
-  run_gold_pipeline()
+  run_gold_pipeline(scope_symbol, scope_start, scope_end)
     -> creates or updates Gold tables/procedure
+    -> renders scoped Silver/Gold filters for incremental uploads
     -> calls sp_silver_to_gold()
     -> creates or updates Semantic views
 ```
@@ -274,8 +277,8 @@ Single uploaded GCS CSV
   -> BigQuery external table
   -> BigQuery staging table
   -> bronze_data.intraday_master
-  -> silver_dataset_us Silver tables
-  -> pulse_trade_gold Gold tables
+  -> silver_dataset_us Silver tables for the uploaded symbol/date scope
+  -> pulse_trade_gold Gold tables for the uploaded symbol/date scope
   -> pulse_trade_semantic Semantic views
 ```
 

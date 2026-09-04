@@ -109,6 +109,7 @@ Responsibilities:
 - Read CSV through a BigQuery external table.
 - Convert CSV `date` as IST.
 - Extract the stock symbol from the file name.
+- Remove a trailing `_YYYY-MM-DD` suffix from incremental file names such as `3MINDIA_2026-03-02.csv`.
 - Merge rows by `symbol + timestamp`.
 - Keep only one latest row for each business key.
 - Partition new Bronze tables by `timestamp`.
@@ -143,6 +144,7 @@ Responsibilities:
 - Calculate reusable technical indicators.
 - Build 5-minute candles from trusted Silver 1-minute rows.
 - Build daily stock rows from trusted Silver intraday data.
+- During incremental uploads, process only the uploaded symbol and timestamp range, with lookback for indicators.
 - Record Silver execution audit.
 
 ### Gold Layer
@@ -174,6 +176,7 @@ Responsibilities:
 - Add business fields such as trend, volume status, and momentum score.
 - Store deterministic trading events in `fact_intraday_signals`.
 - Store daily market facts and multi-year returns.
+- During incremental uploads, process only the scoped Silver rows for the uploaded symbol/date.
 
 ### Semantic Layer
 
@@ -190,6 +193,7 @@ Responsibilities:
 - Expose views only.
 - Read from Gold tables.
 - Provide latest stock metrics, scanner views, breakouts, gainers, losers, returns, and market overview.
+- Use current/latest trading-date views for dashboard sections so stale historical rows are not mixed into current screens.
 
 ## BigQuery Design
 
@@ -282,6 +286,12 @@ relative_volume
 ```
 
 Silver does not create buy/sell signals.
+
+Indicator note:
+
+- `sma_20` is a simple moving average.
+- `vwap` is calculated as cumulative intraday typical-price volume divided by cumulative volume.
+- `ema_9`, `ema_20`, `rsi_14`, `macd`, and `macd_signal` are fast rolling-window approximations, not true recursive technical indicator formulas.
 
 ## Runtime Components
 

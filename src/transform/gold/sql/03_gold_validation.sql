@@ -72,16 +72,16 @@ SELECT
 FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_current_intraday`;
 
 -- =====================================================
--- 5. Top 10 Gainers
--- Purpose: Latest-date gainers ranked by daily return
+-- 5. Ranked Gainers
+-- Purpose: Latest daily gainers ranked by return
 -- =====================================================
 SELECT *
 FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_top_gainers`
 ORDER BY rank;
 
 -- =====================================================
--- 6. Top 10 Losers
--- Purpose: Latest-date losers ranked by daily return
+-- 6. Ranked Losers
+-- Purpose: Latest daily losers ranked by return
 -- =====================================================
 SELECT *
 FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_top_losers`

@@ -52,6 +52,15 @@ CSV files in GCS bucket
   -> Dashboard or chatbot
 ```
 
+## Current Implementation Notes
+
+- Incremental uploads pass `scope_symbol`, `scope_start`, and `scope_end` from Bronze to Silver and Gold.
+- Gold intraday metrics now expose `bar_return_pct` for previous-bar return and `day_return_pct` for previous-trading-day return.
+- Intraday `relative_volume` in Gold is calculated against the previous 20 bars, excluding the current bar.
+- `VOLUME_BREAKOUT` is a crossing event: previous relative volume at or below 2 and current relative volume above 2.
+- `dim_stock` does not invent metadata; `company_name`, `sector`, `industry`, and `exchange` remain `NULL` unless real reference data is added.
+- Semantic views are dashboard-ready read-only views.
+
 ## Why We Have A Gold Layer
 
 Silver already has clean rows and technical indicators.
@@ -62,6 +71,7 @@ Gold is used for business-ready logic:
 - momentum score
 - volume category
 - VWAP/EMA/SMA position
+- bar and day return fields
 - intraday breakout signals
 - crossover signals
 - daily market facts
@@ -342,7 +352,6 @@ Initial values:
 ```text
 1M
 5M
-DAILY
 ```
 
 Why:
@@ -582,7 +591,7 @@ What it does:
 - Inserts:
   - `1M`
   - `5M`
-  - `DAILY`
+- Removes unsupported timeframe rows left by older deployments.
 
 Why:
 
@@ -693,6 +702,18 @@ Why:
 
 - Gives a simple sortable strength score from 0 to 6.
 
+Return fields:
+
+```text
+bar_return_pct = current close versus previous intraday close
+day_return_pct = current close versus previous trading-day close
+```
+
+Why:
+
+- Intraday previous-bar movement and daily stock performance are different concepts.
+- Dashboards use `day_return_pct` for current intraday daily gain/loss.
+
 ### Step 6: Create signal_candidates
 
 What it does:
@@ -797,12 +818,14 @@ Why:
 `VOLUME_BREAKOUT`
 
 ```text
-relative_volume > 2
+previous relative_volume <= 2
+current relative_volume > 2
 ```
 
 Why:
 
 - Detects unusually high trading volume.
+- Avoids repeated breakout signals on every row above the threshold.
 
 ### Step 7: Merge Into fact_intraday_signals
 
@@ -881,25 +904,21 @@ They do not store duplicate table data.
 
 Creates common base views.
 
-### View: vw_latest_intraday
+### View: vw_current_intraday
 
 Purpose:
 
 ```text
-Latest intraday row per symbol + trade_date + timeframe.
+Latest 1M intraday row per stock.
 ```
 
 How it works:
 
 - Reads `fact_intraday_metrics`.
 - Uses `ROW_NUMBER()`.
-- Partitions by:
-
-```text
-symbol, trade_date, timeframe
-```
-
-- Orders by latest `timestamp`.
+- Filters to `timeframe = 1M`.
+- Uses the latest available `trade_date`.
+- Orders each symbol by latest `timestamp`.
 - Keeps row number 1.
 
 Why:
@@ -999,12 +1018,12 @@ Why:
 - Screeners need true/false filters.
 - Users can ask simple questions like "show high volume stocks".
 
-### View: vw_breakouts
+### View: vw_current_breakouts
 
 Purpose:
 
 ```text
-Show recent Gold signal events.
+Show latest trading-date Gold signal events.
 ```
 
 Fields:

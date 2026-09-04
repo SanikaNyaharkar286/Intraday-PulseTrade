@@ -5,6 +5,8 @@ import time
 from google.cloud import bigquery
 
 from transform.config import (
+    AI_DATASET,
+    AI_SNAPSHOT_LOOKBACK_DAYS,
     BQ_LOCATION,
     GOLD_DATASET,
     PROJECT_ID,
@@ -106,6 +108,26 @@ def _render_sql(
                 AND DATE(DATETIME(TIMESTAMP({source_end}), "Asia/Kolkata"))
         """
 
+        gold_ai_intraday_scope_filter = f"""
+        m.symbol = {symbol}
+            AND m.trade_date BETWEEN
+                DATE(DATETIME(TIMESTAMP({source_start}), "Asia/Kolkata"))
+                AND DATE(DATETIME(TIMESTAMP({source_end}), "Asia/Kolkata"))
+        """
+        gold_ai_daily_scope_filter = f"""
+        symbol = {symbol}
+            AND trade_date BETWEEN
+                DATE(DATETIME(TIMESTAMP({source_start}), "Asia/Kolkata"))
+                AND DATE(DATETIME(TIMESTAMP({source_end}), "Asia/Kolkata"))
+        """
+        gold_ai_signal_scope_filter = f"""
+        s.symbol = {symbol}
+            AND s.trade_date BETWEEN
+                DATE(DATETIME(TIMESTAMP({source_start}), "Asia/Kolkata"))
+                AND DATE(DATETIME(TIMESTAMP({source_end}), "Asia/Kolkata"))
+        """
+        ai_signal_delete_scope_filter = f"t.symbol = {symbol}"
+
     else:
         silver_1m_source_filter = ""
         silver_5m_source_filter = ""
@@ -114,12 +136,18 @@ def _render_sql(
         silver_daily_source_filter = ""
         silver_daily_join_filter = ""
         silver_daily_alias_source_filter = "TRUE"
+        gold_ai_intraday_scope_filter = "TRUE"
+        gold_ai_daily_scope_filter = "TRUE"
+        gold_ai_signal_scope_filter = "TRUE"
+        ai_signal_delete_scope_filter = "TRUE"
 
     values = {
         "PROJECT_ID": PROJECT_ID,
         "BQ_LOCATION": BQ_LOCATION,
         "SILVER_DATASET": SILVER_DATASET,
         "GOLD_DATASET": GOLD_DATASET,
+        "AI_DATASET": AI_DATASET,
+        "AI_SNAPSHOT_LOOKBACK_DAYS": str(AI_SNAPSHOT_LOOKBACK_DAYS),
         "SEMANTIC_DATASET": SEMANTIC_DATASET,
         "SILVER_1M_SOURCE_FILTER": silver_1m_source_filter,
         "SILVER_5M_SOURCE_FILTER": silver_5m_source_filter,
@@ -128,6 +156,10 @@ def _render_sql(
         "SILVER_DAILY_SOURCE_FILTER": silver_daily_source_filter,
         "SILVER_DAILY_JOIN_FILTER": silver_daily_join_filter,
         "SILVER_DAILY_ALIAS_SOURCE_FILTER": silver_daily_alias_source_filter,
+        "GOLD_AI_INTRADAY_SCOPE_FILTER": gold_ai_intraday_scope_filter,
+        "GOLD_AI_DAILY_SCOPE_FILTER": gold_ai_daily_scope_filter,
+        "GOLD_AI_SIGNAL_SCOPE_FILTER": gold_ai_signal_scope_filter,
+        "AI_SIGNAL_DELETE_SCOPE_FILTER": ai_signal_delete_scope_filter,
     }
 
     for key, value in values.items():
@@ -182,8 +214,11 @@ def _print_gold_input_summary(
         """
 
     else:
-        intraday_filter = ""
-        date_filter = ""
+        print(
+            "Gold input Silver summary skipped because no incremental "
+            "scope was provided. This avoids full Silver COUNT(*) scans."
+        )
+        return
 
     query = f"""
     SELECT
@@ -278,6 +313,34 @@ def _print_gold_output_summary():
             "  "
             f"{row['table_name']}: "
             f"rows_processed={_format_int(row['rows_total'])}"
+        )
+
+
+def _print_ai_serving_summary():
+    query = f"""
+    SELECT "ai_current_intraday_snapshot" AS table_name, COUNT(*) AS rows_total
+    FROM `{PROJECT_ID}.{AI_DATASET}.ai_current_intraday_snapshot`
+    UNION ALL
+    SELECT "ai_current_signal_snapshot", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_DATASET}.ai_current_signal_snapshot`
+    UNION ALL
+    SELECT "ai_latest_daily_snapshot", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_DATASET}.ai_latest_daily_snapshot`
+    """
+
+    rows = (
+        get_bq_client()
+        .query(query)
+        .result()
+    )
+
+    print("AI serving snapshot summary")
+
+    for row in rows:
+        print(
+            "  "
+            f"{row['table_name']}: "
+            f"rows={_format_int(row['rows_total'])}"
         )
 
 
@@ -378,6 +441,42 @@ def ensure_gold_objects(
     )
 
 
+def ensure_ai_serving_objects(
+    scope_symbol=None,
+    scope_start=None,
+    scope_end=None
+):
+    sql_dir = Path(__file__).parent / "sql"
+
+    _run_sql_file(
+        sql_dir / "04_create_ai_serving_tables.sql"
+    )
+
+    _run_sql_file(
+        sql_dir / "05_sp_refresh_ai_serving.sql",
+        scope_symbol=scope_symbol,
+        scope_start=scope_start,
+        scope_end=scope_end
+    )
+
+
+def refresh_ai_serving_snapshots():
+    procedure_id = (
+        f"`{PROJECT_ID}."
+        f"{AI_DATASET}."
+        "sp_refresh_ai_serving`"
+    )
+
+    job = get_bq_client().query(
+        f"CALL {procedure_id}()"
+    )
+
+    _wait_for_job_with_progress(
+        job,
+        "AI serving refresh"
+    )
+
+
 def ensure_semantic_views():
     sql_dir = Path(__file__).parents[1] / "semantic" / "sql"
 
@@ -433,12 +532,31 @@ def run_gold_pipeline(
         "Gold pipeline"
     )
 
-    _print_gold_output_summary()
+    print(
+        "Review changed BigQuery SQL and dry-run cost before running "
+        "production refreshes."
+    )
+
+    # Disabled to avoid full-table COUNT(*) scans on large Gold tables.
+    # _print_gold_output_summary()
+
+    ensure_ai_serving_objects(
+        scope_symbol=scope_symbol,
+        scope_start=scope_start,
+        scope_end=scope_end
+    )
+
+    refresh_ai_serving_snapshots()
+
+    # AI snapshot tables are small, but keep summary counts disabled by default
+    # while BigQuery spend is tight.
+    # _print_ai_serving_summary()
 
     ensure_semantic_views()
 
-    _print_semantic_summary()
+    # Disabled to avoid full-view COUNT(*) scans over large Gold tables.
+    # _print_semantic_summary()
 
     print(
-        "Gold and Semantic pipeline completed"
+        "Gold, AI serving, and Semantic pipeline completed"
     )

@@ -522,7 +522,8 @@ def run_silver_pipeline(
     )
 
     _print_latest_silver_audit()
-    _print_silver_summary()
+    # Disabled to avoid full-table COUNT(*) scans on large Silver tables.
+    # _print_silver_summary()
 
     if RUN_GOLD_AFTER_SILVER:
         from transform.gold.gold import run_gold_pipeline

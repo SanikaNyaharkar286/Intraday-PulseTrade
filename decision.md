@@ -125,6 +125,8 @@ Reason:
 - New files are processed automatically.
 - No manual command is needed after the Cloud Function is deployed.
 - Re-uploading a CSV safely re-runs the pipeline because Bronze and downstream facts use deterministic keys or merges.
+- Incremental uploads pass the staged symbol and timestamp range into Silver and Gold so only the uploaded symbol/date scope is recalculated.
+- The Cloud Function runs with one instance and one concurrent request to avoid overlapping generated procedure deployments and BigQuery jobs.
 
 ## 6. Why The Main Python Functions Exist
 
@@ -307,8 +309,9 @@ Silver now keeps only the indicators used by Gold and the semantic views. The he
 
 `return_pct`
 
-- Measures price change from previous close.
-- Used for gainers, losers, momentum, and performance dashboards.
+- In Silver intraday tables, measures price change from the previous intraday bar close.
+- Gold exposes this as `bar_return_pct` and adds `day_return_pct` for current close versus previous trading-day close.
+- Daily gainers and losers use daily `fact_daily_market.return_pct`, not intraday previous-bar return.
 
 `gap_pct`
 
@@ -324,7 +327,7 @@ Silver now keeps only the indicators used by Gold and the semantic views. The he
 
 - Exponential moving averages react faster than SMAs.
 - `ema_9` and `ema_20` support crossover logic in Gold.
-- The project uses rolling-window approximations so full historical builds run faster.
+- The current Silver implementation uses rolling-window approximations so full historical builds run faster.
 
 `rsi_14`
 
@@ -450,8 +453,8 @@ Reason:
 
 `VOLUME_BREAKOUT`
 
-- Fires when `relative_volume > 2`.
-- This uses Silver volume baselines and keeps the signal deterministic.
+- Fires when `relative_volume` crosses above 2 from a previous value at or below 2.
+- This avoids repeated breakout events on every high-volume row.
 
 ## 15. Semantic Layer Uses Views Only
 
@@ -464,13 +467,13 @@ pulse_trade_semantic
 Views:
 
 ```text
-vw_latest_intraday
-vw_latest_daily
+vw_current_intraday
 vw_stock_metrics
 vw_scanner
-vw_breakouts
+vw_current_breakouts
 vw_top_gainers
 vw_top_losers
+vw_latest_daily
 vw_stock_returns
 vw_market_overview
 ```

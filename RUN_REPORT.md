@@ -102,3 +102,20 @@ cd D:\project\Intraday-PulseTrade\src
 ```
 
 6. After Google Cloud authentication is available, run the historical loader or Cloud Function local test from the README.
+
+## Update: 2026-09-04
+
+The project was updated for scoped incremental processing:
+
+- Incremental Bronze now derives the uploaded file's symbol and timestamp range from the staging table.
+- Silver receives that scope and filters Bronze early, while keeping a 100-day lookback for indicator calculations.
+- Gold receives the same scope and limits intraday metrics, signals, and daily facts to the uploaded symbol/date where possible.
+- Gold runtime logging now prints start time, end time, elapsed time, Silver input counts, Gold output counts, and Semantic view counts.
+- Semantic view documentation now reflects the current dashboard views:
+  `vw_current_intraday`, `vw_stock_metrics`, `vw_scanner`, `vw_current_breakouts`, `vw_top_gainers`, `vw_top_losers`, `vw_latest_daily`, `vw_stock_returns`, and `vw_market_overview`.
+- The recommended Cloud Function deployment is now single-concurrency with `--timeout=540s`, `--memory=2Gi`, `--cpu=1`, `--concurrency=1`, and `--max-instances=1`.
+
+Known indicator caveat:
+
+- Silver `sma_20` and `vwap` are standard SQL calculations.
+- Silver `ema_9`, `ema_20`, `rsi_14`, `macd`, and `macd_signal` are rolling-window approximations, not true recursive technical indicator formulas.

@@ -28,22 +28,16 @@ FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_current_intraday`;
 -- Purpose: Latest-date intraday breakout and crossover events
 -- =====================================================
 CREATE OR REPLACE VIEW `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_current_breakouts` AS
-WITH latest_trade_date AS (
-    SELECT MAX(trade_date) AS trade_date
-    FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_intraday_metrics`
-)
 SELECT
-    s.symbol,
-    s.trade_date,
-    s.timestamp,
-    s.timeframe,
-    s.signal_type,
-    s.signal_value,
-    s.reference_value
-FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_intraday_signals` s
-INNER JOIN latest_trade_date d
-    ON d.trade_date = s.trade_date
-WHERE s.signal_type IN (
+    symbol,
+    trade_date,
+    timestamp,
+    timeframe,
+    signal_type,
+    signal_value,
+    reference_value
+FROM `{{PROJECT_ID}}.{{AI_DATASET}}.ai_current_signal_snapshot`
+WHERE signal_type IN (
     "DAY_HIGH_BREAKOUT",
     "DAY_LOW_BREAKDOWN",
     "VWAP_CROSS_UP",

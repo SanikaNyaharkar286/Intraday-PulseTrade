@@ -36,7 +36,7 @@ Historical range: 2015-01 to 2026-02
 Historical Silver mode: run after every Bronze month
 Cloud Function: process-new-csv
 Cloud Function region: us-east1
-Function workers: 4
+Function workers: 1
 Function threads per worker: 1
 ```
 
@@ -183,12 +183,15 @@ $env:BQ_BRONZE_DATASET="bronze_data"
 $env:BQ_BRONZE_TABLE="intraday_master"
 $env:BQ_SILVER_DATASET="silver_dataset_us"
 $env:BQ_GOLD_DATASET="pulse_trade_gold"
+$env:BQ_AI_DATASET="pulse_trade_ai"
+$env:AI_SNAPSHOT_LOOKBACK_DAYS="30"
 $env:BQ_SEMANTIC_DATASET="pulse_trade_semantic"
 $env:BQ_AUDIT_DATASET="audit_dataset_us"
 $env:BQ_AUDIT_TABLE="pipeline_audit"
 $env:RUN_GOLD_AFTER_SILVER="true"
-$env:WORKERS="4"
+$env:WORKERS="1"
 $env:THREADS="1"
+$env:GUNICORN_CMD_ARGS="--timeout 540 --graceful-timeout 540"
 $env:HISTORICAL_START_YEAR="2015"
 $env:HISTORICAL_START_MONTH="1"
 $env:HISTORICAL_END_YEAR="2026"
@@ -238,7 +241,7 @@ If you want the faster behavior, set:
 $env:HISTORICAL_RUN_SILVER_EACH_MONTH="false"
 ```
 
-Silver uses fast rolling-window EMA/MACD approximations during large historical builds. This avoids the expensive row-to-prior-rows self-join that made full Silver runs very slow.
+Silver uses fast rolling-window EMA/MACD approximations during large historical builds. This avoids the expensive row-to-prior-rows self-join that made full Silver runs very slow. These fields are useful for dashboards, but they are simplified indicators rather than true recursive EMA, Wilder RSI, and EMA-based MACD.
 
 After each month succeeds, the pipeline writes a checkpoint:
 
@@ -286,7 +289,7 @@ functions-framework --target=process_new_csv --signature-type=cloudevent --port=
 For a Linux/container multi-worker run, set the worker env vars before starting the framework:
 
 ```powershell
-$env:WORKERS="4"
+$env:WORKERS="1"
 $env:THREADS="1"
 functions-framework --target=process_new_csv --signature-type=cloudevent --port=8080
 ```
@@ -334,14 +337,17 @@ gcloud functions deploy process-new-csv `
   --region=us-east1 `
   --source=. `
   --entry-point=process_new_csv `
-  --concurrency=4 `
-  --max-instances=10 `
+  --memory=2Gi `
+  --cpu=1 `
+  --timeout=540s `
+  --concurrency=1 `
+  --max-instances=1 `
   --trigger-event-filters=type=google.cloud.storage.object.v1.finalized `
   --trigger-event-filters=bucket=processed-intraday `
-  --set-env-vars="GCP_PROJECT_ID=project-001658fa-3ce5-4746-980,GCP_REGION=us-east1,BQ_LOCATION=US,GCS_BUCKET=processed-intraday,BQ_BRONZE_DATASET=bronze_data,BQ_BRONZE_TABLE=intraday_master,BQ_SILVER_DATASET=silver_dataset_us,BQ_GOLD_DATASET=pulse_trade_gold,BQ_SEMANTIC_DATASET=pulse_trade_semantic,BQ_AUDIT_DATASET=audit_dataset_us,BQ_AUDIT_TABLE=pipeline_audit,RUN_GOLD_AFTER_SILVER=true,WORKERS=4,THREADS=1"
+  --set-env-vars="GCP_PROJECT_ID=project-001658fa-3ce5-4746-980,GCP_REGION=us-east1,BQ_LOCATION=US,GCS_BUCKET=processed-intraday,BQ_BRONZE_DATASET=bronze_data,BQ_BRONZE_TABLE=intraday_master,BQ_SILVER_DATASET=silver_dataset_us,BQ_GOLD_DATASET=pulse_trade_gold,BQ_AI_DATASET=pulse_trade_ai,AI_SNAPSHOT_LOOKBACK_DAYS=30,BQ_SEMANTIC_DATASET=pulse_trade_semantic,BQ_AUDIT_DATASET=audit_dataset_us,BQ_AUDIT_TABLE=pipeline_audit,RUN_GOLD_AFTER_SILVER=true,WORKERS=1,THREADS=1,GUNICORN_CMD_ARGS=--timeout 540 --graceful-timeout 540"
 ```
 
-`--concurrency=4` lets one Gen2 function instance accept several file events at once, and `--max-instances=10` lets Google Cloud start more instances when many CSVs arrive together. Keep these numbers modest because every event can start BigQuery jobs and a Silver refresh.
+The incremental function is deployed with `--concurrency=1` and `--max-instances=1` so only one uploaded CSV runs through Bronze, Silver, Gold, and Semantic at a time. This avoids overlapping BigQuery jobs while the pipeline uses generated, file-scoped stored procedures.
 
 After deploy, uploading a CSV to the bucket automatically runs:
 
@@ -525,6 +531,8 @@ ema_9, ema_20, rsi_14, macd, macd_signal,
 vwap, avg_volume_20, relative_volume
 ```
 
+Indicator note: `sma_20` and `vwap` are standard SQL calculations. `ema_9`, `ema_20`, `rsi_14`, `macd`, and `macd_signal` are fast rolling-window approximations in Silver, not true recursive technical indicator formulas.
+
 Silver does not create buy or sell signals.
 
 Silver stores intraday `timestamp` as BigQuery `DATETIME`, not `TIMESTAMP`, so the value displays directly as IST market time.
@@ -558,6 +566,8 @@ price_vs_sma20
 volume_status
 trend
 momentum_score
+bar_return_pct
+day_return_pct
 ```
 
 Trading events are stored in `fact_intraday_signals`, including:
@@ -581,13 +591,13 @@ Gold is where trading/business logic belongs. Silver keeps indicators; Gold turn
 Semantic views read from Gold and are ready for dashboards or chatbot questions:
 
 ```text
-vw_latest_intraday
-vw_latest_daily
+vw_current_intraday
 vw_stock_metrics
 vw_scanner
-vw_breakouts
+vw_current_breakouts
 vw_top_gainers
 vw_top_losers
+vw_latest_daily
 vw_stock_returns
 vw_market_overview
 ```
