@@ -3,6 +3,10 @@ from datetime import datetime, timezone
 from src.transform.silver.timeframe.aggregator import (
     aggregate_timeframe,
 )
+from src.transform.silver.readers import (
+    read_silver_timeframe_data
+)
+
 
 from src.utils.timeframe_config import (
     get_timeframe_config,
@@ -45,12 +49,42 @@ from src.utils.config import (
 # TABLE NAMES
 # ==========================================================
 
-SOURCE_TABLE = (
+BRONZE_SOURCE_TABLE = (
     f"{GCP_PROJECT_ID}."
     f"{BQ_BRONZE_DATASET}."
     f"{BQ_BRONZE_TABLE}"
 )
+def get_source_table_for_timeframe(timeframe):
 
+    sources = {
+
+        "1min":
+        f"{GCP_PROJECT_ID}.{BQ_BRONZE_DATASET}.{BQ_BRONZE_TABLE}",
+
+
+        "5min":
+        f"{GCP_PROJECT_ID}.{BQ_SILVER_DATASET}.silver_1min",
+
+
+        "15min":
+        f"{GCP_PROJECT_ID}.{BQ_SILVER_DATASET}.silver_5min",
+
+
+        "1hour":
+        f"{GCP_PROJECT_ID}.{BQ_SILVER_DATASET}.silver_15min",
+
+
+        "daily":
+        f"{GCP_PROJECT_ID}.{BQ_SILVER_DATASET}.silver_1hour",
+
+    }
+
+
+    return sources.get(timeframe)
+
+    print(
+        f"[{symbol}] Processing {timeframe} from {SOURCE_TABLE}"
+    )
 
 """TARGET_TABLE = (
     f"{GCP_PROJECT_ID}."
@@ -141,8 +175,10 @@ def run_silver_pipeline(
 
     HISTORICAL
     ----------
-    Read Bronze data normally, calculate indicators,
-    and load the calculated rows.
+    1min reads Bronze.
+    Higher timeframes read previous Silver timeframe,
+    aggregate candles, calculate indicators,
+    and load Silver output.
 
     INCREMENTAL
     -----------
@@ -160,11 +196,17 @@ def run_silver_pipeline(
     # ======================================================
 
     run_id = str(
-        uuid.uuid4()
-        )
+            uuid.uuid4()
+            )
     timeframe_config = get_timeframe_config(
-    timeframe
+        timeframe
     )
+
+    SOURCE_TABLE = timeframe_config["source_table"]
+
+    
+
+    AGGREGATION = timeframe_config["aggregation"]
 
     TARGET_TABLE = (
     f"{GCP_PROJECT_ID}."
@@ -222,107 +264,88 @@ def run_silver_pipeline(
     try:
 
         # ==================================================
-        # 1. READ BRONZE
+        # 1. READ SOURCE DATA
         # ==================================================
 
-        if load_type == "INCREMENTAL":
+        current_stage = "source_read"
 
-            # ==============================================
-            # IMPORTANT:
-            #
-            # Do NOT use start_date here.
-            #
-            # We intentionally read all available Bronze
-            # history for this symbol up through end_date.
-            #
-            # This historical context is required for:
-            #
-            # SMA
-            # EMA
-            # RSI
-            # MACD
-            # ATR
-            # ADX
-            # previous session close
-            # gap
-            # etc.
-            # ==============================================
 
-            bronze_df = read_bronze_data(
-                client=client,
-                symbol=symbol,
-                start_date=None,
-                end_date=end_date,
+        if timeframe == "1min":
+
+            print(
+                f"[{symbol}] Reading Bronze source"
             )
 
-        else:
-
-            # ==============================================
-            # HISTORICAL
-            # ==============================================
-
-            bronze_df = read_bronze_data(
+            source_df = read_bronze_data(
                 client=client,
                 symbol=symbol,
                 start_date=start_date,
                 end_date=end_date,
             )
 
-        bronze_rows = len(
-            bronze_df
-        )
+        else:
+
+            print(
+                f"[{symbol}] Reading Silver source table:"
+            )
+
+            print(
+                f"        {SOURCE_TABLE}"
+            )
+
+            source_df = read_silver_timeframe_data(
+                client=client,
+                symbol=symbol,
+                table_name=SOURCE_TABLE,
+                start_date=start_date,
+                end_date=end_date,
+            )
+
+
+        source_rows = len(source_df)
+
 
         print(
             f"[{symbol}] "
-            f"Bronze rows read: "
-            f"{bronze_rows}"
+            f"Source rows read: {source_rows}"
         )
-            # ==================================================
-        # TIMEFRAME AGGREGATION
+
+
+        # ==================================================
+        # 2. TIMEFRAME AGGREGATION
         # ==================================================
 
         if timeframe != "1min":
 
-            aggregation_rule = (
-                timeframe_config["aggregation"]
-            )
+            aggregation_rule = AGGREGATION
+
 
             print(
                 f"[{symbol}] "
-                f"Aggregating 1min data "
+                f"Aggregating source data "
                 f"to {timeframe}"
             )
 
-            bronze_df = aggregate_timeframe(
-                bronze_df,
+
+            source_df = aggregate_timeframe(
+                source_df,
                 aggregation_rule,
             )
+
 
             print(
                 f"[{symbol}] "
                 f"{timeframe} rows after aggregation: "
-                f"{len(bronze_df)}"
+                f"{len(source_df)}"
             )
 
-            if load_type == "INCREMENTAL":
 
-                print(
-                    f"[{symbol}] "
-                    f"Incremental output range: "
-                    f"{start_date} -> {end_date}"
-                )
-
-                print(
-                    f"[{symbol}] "
-                    "Historical Bronze context "
-                    "included for indicator calculation."
-                )
-
+        input_df = source_df
         # ==================================================
         # NO BRONZE DATA
         # ==================================================
 
-        if bronze_df.empty:
+        if input_df.empty:
 
             completed_at = datetime.now(
                 timezone.utc
@@ -363,7 +386,7 @@ def run_silver_pipeline(
 
         valid_df, rejected_df = (
             validate_bronze_data(
-                bronze_df
+                input_df
             )
         )
 

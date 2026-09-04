@@ -126,9 +126,9 @@ def start_silver_subscriber():
         callback=callback,
         flow_control=pubsub_v1.types.FlowControl(
             max_messages=1
-        ),
+            )
+        )
     )
-)
 
     print(
         "\nWaiting for Bronze completion "

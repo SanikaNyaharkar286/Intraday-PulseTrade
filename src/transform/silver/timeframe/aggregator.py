@@ -2,17 +2,6 @@ import pandas as pd
 
 
 def _normalize_resample_rule(timeframe):
-    """
-    Convert timeframe configuration into pandas resample format.
-
-    Examples:
-        5      -> "5min"
-        15     -> "15min"
-        60     -> "60min"
-        1440   -> "1D"
-        "5min" -> "5min"
-        "1D"   -> "1D"
-    """
 
     if isinstance(timeframe, int):
 
@@ -29,11 +18,27 @@ def _normalize_resample_rule(timeframe):
     )
 
 
-    if timeframe in {"daily", "day"}:
-        return "1D"
+    mapping = {
+
+        "5min": "5min",
+
+        "15min": "15min",
+
+        "1hour": "1h",
+
+        "hour": "1h",
+
+        "daily": "1D",
+
+        "day": "1D",
+
+    }
 
 
-    return timeframe
+    return mapping.get(
+        timeframe,
+        timeframe
+    )
 
 
 
@@ -41,27 +46,13 @@ def aggregate_timeframe(
     df: pd.DataFrame,
     timeframe: str,
 ) -> pd.DataFrame:
-    """
-    Convert 1 minute OHLCV data into higher timeframe candles.
 
-    Input:
-        1 minute bronze data
-
-    Output:
-        Aggregated OHLCV dataframe
-    """
 
     if df.empty:
         return df
 
 
     df = df.copy()
-
-
-    # Normalize pandas frequency
-    timeframe = _normalize_resample_rule(
-        timeframe
-    )
 
 
     df["date"] = pd.to_datetime(
@@ -74,32 +65,86 @@ def aggregate_timeframe(
         .sort_values(
             [
                 "symbol",
-                "date",
+                "date"
             ]
         )
     )
 
 
-    result = (
-        df
-        .set_index("date")
-        .groupby("symbol")
-        .resample(
-            timeframe,
-            label="left",
-            closed="left"
-        )
-        .agg(
+    rule = _normalize_resample_rule(
+        timeframe
+    )
+
+
+    # ======================================================
+    # Market session alignment
+    # Only hourly candles need offset.
+    #
+    # 09:15 -> 10:15 -> 11:15
+    #
+    # 5min and 15min already align correctly.
+    # Daily should start from midnight.
+    # ======================================================
+
+    resample_config = {
+
+        "label": "left",
+
+        "closed": "left"
+
+    }
+
+
+    if rule == "1h":
+
+        resample_config.update(
+
             {
-                "open": "first",
-                "high": "max",
-                "low": "min",
-                "close": "last",
-                "volume": "sum",
+
+                "origin": "start_day",
+
+                "offset": "15min"
+
             }
+
         )
+
+
+    result = (
+
+        df
+
+        .set_index("date")
+
+        .groupby("symbol")
+
+        .resample(
+            rule,
+            **resample_config
+        )
+
+        .agg(
+
+            {
+
+                "open": "first",
+
+                "high": "max",
+
+                "low": "min",
+
+                "close": "last",
+
+                "volume": "sum",
+
+            }
+
+        )
+
         .dropna()
+
         .reset_index()
+
     )
 
 

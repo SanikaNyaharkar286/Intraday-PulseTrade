@@ -1,5 +1,5 @@
 import json
-
+from src.utils.pipeline_logger import pipeline_log
 from google.cloud import bigquery
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.transform.silver.pipeline import (
@@ -41,6 +41,12 @@ def process_silver_symbol(
         f"\n[{batch_id}] "
         f"Processing Silver 1min for {symbol}"
     )
+    pipeline_log(
+    stage="SILVER_1MIN_PROCESSING",
+    batch_id=batch_id,
+    symbol=symbol,
+    status="STARTED"
+)
 
 
     result = run_silver_pipeline(
@@ -58,6 +64,12 @@ def process_silver_symbol(
         timeframe="1min",
 
     )
+    pipeline_log(
+    stage="SILVER_1MIN_PROCESSING",
+    batch_id=batch_id,
+    symbol=symbol,
+    status="SUCCESS"
+)
 
 
     print(
@@ -129,7 +141,7 @@ def handle_bronze_batch_completed(
     payload = json.loads(
         message_data.decode("utf-8")
     )
-
+    
     print(
         "Received Bronze -> Silver message:"
     )
@@ -191,6 +203,13 @@ def handle_bronze_batch_completed(
     end_date = payload.get(
         "end_date"
     )
+    pipeline_log(
+        stage="BRONZE_TO_SILVER_MESSAGE_RECEIVED",
+        batch_id=batch_id,
+        status="STARTED",
+        message=f"Symbols received: {len(symbols)}"
+    )
+    
 
 
     # ======================================================
@@ -286,7 +305,12 @@ def handle_bronze_batch_completed(
 
 
     
-
+    pipeline_log(
+    stage="SILVER_EVENT_PUBLISH",
+    batch_id=batch_id,
+    status="STARTED",
+    message="Publishing silver-timeframe-completed"
+)
 
     message_id = publish_silver_completed(
 
@@ -305,6 +329,7 @@ def handle_bronze_batch_completed(
     end_date=end_date,
 
 )
+    
     print(
         "\nSILVER 1MIN COMPLETION EVENT PUBLISHED"
     )
@@ -554,6 +579,17 @@ def publish_next_timeframe_event(
 ):
 
     topic_name = SILVER_TIMEFRAME_COMPLETED
+    pipeline_log(
+        stage="SILVER_EVENT_PUBLISH",
+        batch_id=batch_id,
+        status="STARTED",
+        message="Publishing silver-timeframe-completed"
+    )
+    print("==============================")
+    print("PUBLISHING NEXT TIMEFRAME EVENT")
+    print(f"TIMEFRAME SENT: {timeframe}")
+    print(f"SYMBOL COUNT: {len(symbols)}")
+    print("==============================")
 
 
 
@@ -574,3 +610,6 @@ def publish_next_timeframe_event(
         end_date=end_date,
 
     )
+
+
+    silver_subscriber()
