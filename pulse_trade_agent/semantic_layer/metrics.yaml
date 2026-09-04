@@ -1,0 +1,69 @@
+metrics:
+
+  RSI:
+
+    column:
+      rsi_14
+
+    meaning:
+      Relative Strength Index
+
+
+    conditions:
+
+      oversold:
+        column:
+          rsi_oversold
+
+        value:
+          true
+
+
+      overbought:
+        column:
+          rsi_overbought
+
+        value:
+          true
+
+
+
+  VWAP:
+
+    column:
+      vwap
+
+
+    conditions:
+
+      above:
+        column:
+          above_vwap
+
+
+
+  MACD:
+
+    column:
+      macd
+
+
+    conditions:
+
+      bullish:
+        column:
+          macd_bullish
+
+
+
+  Relative Volume:
+
+    column:
+      relative_volume
+
+
+    conditions:
+
+      high_volume:
+        column:
+          high_volume
