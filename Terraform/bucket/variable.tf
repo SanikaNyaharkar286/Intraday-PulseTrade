@@ -14,7 +14,3 @@ variable "region" {
   default     = "us-east1"
 }
 
-variable "migration_service_account" {
-  description = "Migration service account email"
-  type        = string
-}
