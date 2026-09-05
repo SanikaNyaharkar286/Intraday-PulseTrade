@@ -71,6 +71,11 @@ AI_DATASET = os.getenv(
     "pulse_trade_ai"
 )
 
+AI_SEMANTIC_DATASET = os.getenv(
+    "BQ_AI_SEMANTIC_DATASET",
+    "pulse_trade_ai_semantic"
+)
+
 AI_SNAPSHOT_LOOKBACK_DAYS = _int_env(
     "AI_SNAPSHOT_LOOKBACK_DAYS",
     30

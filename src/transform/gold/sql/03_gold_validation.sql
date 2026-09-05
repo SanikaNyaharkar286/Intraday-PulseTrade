@@ -50,64 +50,58 @@ GROUP BY symbol, trade_date
 HAVING COUNT(*) > 1;
 
 -- =====================================================
--- 3. Latest Trading Date
--- Purpose: Check latest dates used by daily and intraday views
+-- 4. AI Current Market State
+-- Purpose: One latest 1M row per stock
 -- =====================================================
 SELECT
     (SELECT MAX(trade_date)
      FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_intraday_metrics`
      WHERE timeframe = "1M") AS latest_intraday_trade_date,
     (SELECT MAX(trade_date)
-     FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_daily_market`) AS latest_daily_trade_date;
+FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_current_market_state`;
 
 -- =====================================================
--- 4. Current Intraday Snapshot
--- Purpose: One latest 1M row per stock
--- =====================================================
-SELECT
-    COUNT(*) AS current_snapshot_rows,
-    COUNT(DISTINCT symbol) AS current_snapshot_symbols,
-    MIN(trade_date) AS min_trade_date,
-    MAX(trade_date) AS max_trade_date
-FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_current_intraday`;
-
--- =====================================================
--- 5. Ranked Gainers
--- Purpose: Latest daily gainers ranked by return
--- =====================================================
-SELECT *
-FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_top_gainers`
-ORDER BY rank;
-
--- =====================================================
--- 6. Ranked Losers
--- Purpose: Latest daily losers ranked by return
--- =====================================================
-SELECT *
-FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_top_losers`
-ORDER BY rank;
-
--- =====================================================
--- 7. Market Overview
--- Purpose: Current market breadth summary
--- =====================================================
-SELECT *
-FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_market_overview`;
-
--- =====================================================
--- 8. Current Breakouts
--- Purpose: Current-date deterministic signals
+-- 5. AI Signal History
+-- Purpose: Signal events available to the agent
 -- =====================================================
 SELECT
     signal_type,
     COUNT(*) AS signal_count
-FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_current_breakouts`
+FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_signal_history_90d`
 GROUP BY signal_type
 ORDER BY signal_count DESC;
+    MIN(trade_date) AS min_trade_date,
+    MAX(trade_date) AS max_trade_date
+-- 6. AI Intraday History
+-- Purpose: Confirm the fixed historical intraday range
+-- =====================================================
+SELECT
+    COUNT(*) AS candle_rows,
+    COUNT(DISTINCT symbol) AS symbols,
+    MIN(trade_date) AS first_trade_date,
+    MAX(trade_date) AS last_trade_date
+FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_intraday_history_90d`;
+SELECT *
+FROM `{{PROJECT_ID}}.{{SEMANTIC_DATASET}}.vw_top_gainers`
+-- 7. AI Daily History
+-- Purpose: Confirm the daily historical table
+-- =====================================================
+SELECT
+    COUNT(*) AS daily_rows,
+    COUNT(DISTINCT symbol) AS symbols,
+    MIN(trade_date) AS first_trade_date,
+    MAX(trade_date) AS last_trade_date
+FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_daily_history`;
+-- =====================================================
+SELECT *
+-- 8. AI Behavior And Summary Tables
+-- Purpose: Confirm derived tables are populated
 
 -- =====================================================
--- 9. Stock Returns
--- Purpose: Confirm simple 1Y/2Y/3Y/5Y return snapshots
+    (SELECT COUNT(*) FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_intraday_behavior`)
+        AS behavior_rows,
+    (SELECT COUNT(*) FROM `{{PROJECT_ID}}.{{AI_SEMANTIC_DATASET}}.spot_ai_stock_summary`)
+        AS summary_rows;
 -- =====================================================
 SELECT
     symbol,

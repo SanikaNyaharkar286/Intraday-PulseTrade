@@ -6,6 +6,7 @@ from google.cloud import bigquery
 
 from transform.config import (
     AI_DATASET,
+    AI_SEMANTIC_DATASET,
     AI_SNAPSHOT_LOOKBACK_DAYS,
     BQ_LOCATION,
     GOLD_DATASET,
@@ -147,6 +148,7 @@ def _render_sql(
         "SILVER_DATASET": SILVER_DATASET,
         "GOLD_DATASET": GOLD_DATASET,
         "AI_DATASET": AI_DATASET,
+        "AI_SEMANTIC_DATASET": AI_SEMANTIC_DATASET,
         "AI_SNAPSHOT_LOOKBACK_DAYS": str(AI_SNAPSHOT_LOOKBACK_DAYS),
         "SEMANTIC_DATASET": SEMANTIC_DATASET,
         "SILVER_1M_SOURCE_FILTER": silver_1m_source_filter,
@@ -346,32 +348,23 @@ def _print_ai_serving_summary():
 
 def _print_semantic_summary():
     query = f"""
-    SELECT "vw_current_intraday" AS view_name, COUNT(*) AS rows_total
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_current_intraday`
+    SELECT "spot_ai_current_market_state" AS table_name, COUNT(*) AS rows_total
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_current_market_state`
     UNION ALL
-    SELECT "vw_stock_metrics", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_stock_metrics`
+    SELECT "spot_ai_signal_history_90d", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_signal_history_90d`
     UNION ALL
-    SELECT "vw_scanner", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_scanner`
+    SELECT "spot_ai_intraday_history_90d", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_intraday_history_90d`
     UNION ALL
-    SELECT "vw_current_breakouts", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_current_breakouts`
+    SELECT "spot_ai_daily_history", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_daily_history`
     UNION ALL
-    SELECT "vw_top_gainers", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_top_gainers`
+    SELECT "spot_ai_intraday_behavior", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_intraday_behavior`
     UNION ALL
-    SELECT "vw_top_losers", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_top_losers`
-    UNION ALL
-    SELECT "vw_latest_daily", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_latest_daily`
-    UNION ALL
-    SELECT "vw_stock_returns", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_stock_returns`
-    UNION ALL
-    SELECT "vw_market_overview", COUNT(*)
-    FROM `{PROJECT_ID}.{SEMANTIC_DATASET}.vw_market_overview`
+    SELECT "spot_ai_stock_summary", COUNT(*)
+    FROM `{PROJECT_ID}.{AI_SEMANTIC_DATASET}.spot_ai_stock_summary`
     """
 
     rows = (
@@ -385,7 +378,7 @@ def _print_semantic_summary():
     for row in rows:
         print(
             "  "
-            f"{row['view_name']}: "
+            f"{row['table_name']}: "
             f"rows={_format_int(row['rows_total'])}"
         )
 
@@ -480,15 +473,9 @@ def refresh_ai_serving_snapshots():
 def ensure_semantic_views():
     sql_dir = Path(__file__).parents[1] / "semantic" / "sql"
 
-    for file_name in [
-        "01_create_semantic_views.sql",
-        "02_stock_views.sql",
-        "03_scanner_views.sql",
-        "04_market_views.sql",
-    ]:
-        _run_sql_file(
-            sql_dir / file_name
-        )
+    _run_sql_file(
+        sql_dir / "05_create_ai_semantic_tables.sql"
+    )
 
 
 def run_gold_pipeline(
