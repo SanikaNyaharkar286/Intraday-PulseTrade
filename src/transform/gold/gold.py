@@ -9,6 +9,7 @@ from transform.config import (
     AI_SEMANTIC_DATASET,
     AI_SNAPSHOT_LOOKBACK_DAYS,
     BQ_LOCATION,
+    DASHBOARD_DATASET,
     GOLD_DATASET,
     PROJECT_ID,
     SEMANTIC_DATASET,
@@ -151,6 +152,7 @@ def _render_sql(
         "AI_SEMANTIC_DATASET": AI_SEMANTIC_DATASET,
         "AI_SNAPSHOT_LOOKBACK_DAYS": str(AI_SNAPSHOT_LOOKBACK_DAYS),
         "SEMANTIC_DATASET": SEMANTIC_DATASET,
+        "DASHBOARD_DATASET": DASHBOARD_DATASET,
         "SILVER_1M_SOURCE_FILTER": silver_1m_source_filter,
         "SILVER_5M_SOURCE_FILTER": silver_5m_source_filter,
         "GOLD_SIGNAL_SCOPE_FILTER": gold_signal_scope_filter,
@@ -475,6 +477,10 @@ def ensure_semantic_views():
 
     _run_sql_file(
         sql_dir / "05_create_ai_semantic_tables.sql"
+    )
+
+    _run_sql_file(
+        sql_dir / "06_create_dashboard_views.sql"
     )
 
 

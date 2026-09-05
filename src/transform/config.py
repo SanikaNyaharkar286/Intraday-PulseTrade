@@ -86,6 +86,11 @@ SEMANTIC_DATASET = os.getenv(
     "pulse_trade_semantic"
 )
 
+DASHBOARD_DATASET = os.getenv(
+    "BQ_DASHBOARD_DATASET",
+    "pulse_trade_semantic_v2"
+)
+
 RUN_GOLD_AFTER_SILVER = _bool_env(
     "RUN_GOLD_AFTER_SILVER",
     True
