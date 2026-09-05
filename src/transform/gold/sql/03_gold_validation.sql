@@ -2,7 +2,7 @@
 -- 1. Gold Row Counts
 -- Purpose: Confirm Gold tables contain expected data
 -- =====================================================
-SELECT "dim_stock" AS table_name, COUNT(*) AS row_count
+"""SELECT "dim_stock" AS table_name, COUNT(*) AS row_count
 FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.dim_stock`
 UNION ALL
 SELECT "dim_date", COUNT(*)
@@ -21,7 +21,7 @@ SELECT "fact_daily_market", COUNT(*)
 FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_daily_market`
 UNION ALL
 SELECT "fact_stock_returns", COUNT(*)
-FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_stock_returns`;
+FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_stock_returns`;"""
 
 -- =====================================================
 -- 2. Duplicate Detection

@@ -1,4 +1,0 @@
-google-adk
-google-cloud-bigquery
-google-genai
-python-dotenv
