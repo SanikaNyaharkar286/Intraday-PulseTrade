@@ -1,0 +1,7 @@
+google-adk
+google-cloud-bigquery
+google-generativeai
+streamlit
+pandas
+plotly
+python-dotenv
