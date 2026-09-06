@@ -51,6 +51,7 @@ SIGNAL_KEYWORDS = {
 }
 INTENT_CONTEXT = """
 
+
 PULSETRADE AI INTENT ROUTING
 Your responsibility:
 Understand the user's question,
@@ -141,6 +142,29 @@ Use fields:
 symbol
 vwap
 price_vs_vwap
+
+INTENT: stock_comparison
+
+Purpose:
+Compare two stocks using historical market metrics.
+
+Examples:
+
+"Compare RELIANCE and HDFCBANK"
+
+"Compare HDFCBANK and ICICIBANK"
+
+"Which performed better between TCS and INFY?"
+
+"Compare VWAP deviation between two stocks"
+
+Tool:
+analyze_stock_comparison
+
+
+Use:
+spot_ai_daily_history
+spot_ai_intraday_behavior
 
 
 

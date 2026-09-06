@@ -70,7 +70,22 @@ unless mapped before querying.
 """
 BUSINESS_RULES = """
 
+UNIVERSE RULE:
 
+All stocks available in PulseTrade semantic datasets belong to the Nifty 500 universe.
+
+Users asking for Nifty 500 stocks do not require additional filtering.
+
+Treat the complete stock universe as Nifty 500 unless another universe is explicitly provided.
+
+COMPARISON RULE:
+
+When users ask to compare stocks:
+
+- compare historical observations only
+- do not provide buy/sell recommendations
+- highlight differences in metrics
+- avoid declaring a winner
 PULSETRADE AI BUSINESS INTERPRETATION RULES
 
 

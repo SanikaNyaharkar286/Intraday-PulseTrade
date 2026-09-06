@@ -14,6 +14,7 @@ DailyIntent = Literal[
 
 
 def analyze_daily_history(
+        
     intent: DailyIntent,
     symbol: Optional[str] = None,
     symbols: Optional[list[str]] = None,
@@ -122,14 +123,15 @@ def analyze_daily_history(
             """
 
 
-        sql += """
+        sql += f"""
         ORDER BY trade_date DESC
         LIMIT {limit}
         """
 
 
         params = {
-            "symbol": symbol.upper()
+            "symbol": symbol.upper(),
+            "limit": limit
         }
 
 
@@ -144,6 +146,14 @@ def analyze_daily_history(
             sql,
             parameters=params
         )
+        if len(result) == 0:
+
+            return {
+                "error": "No historical data found",
+                "symbol": symbol.upper(),
+                "intent": intent,
+                "action": "symbol_lookup_required"
+            }
 
         return {
             "intent": intent,
@@ -311,6 +321,14 @@ def analyze_daily_history(
             sql,
             parameters=params
         )
+        if len(result) == 0:
+
+            return {
+                "error": "No data found for symbol",
+                "symbol": symbol.upper(),
+                "intent": intent,
+                "action": "symbol_lookup_required"
+            }
 
         return {
             "intent": intent,
@@ -322,3 +340,5 @@ def analyze_daily_history(
     raise ValueError(
         f"Unsupported daily intent: {intent}"
     )
+
+

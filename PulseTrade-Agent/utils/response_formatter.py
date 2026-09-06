@@ -1,50 +1,47 @@
 import pandas as pd
 
 
-def format_agent_response(result, question):
+def format_response(data, question):
 
-    if not result:
-        return """
+    if not data:
+        return {
+            "text": """
 No matching data was found.
 
-Try changing your criteria or timeframe.
-"""
+Try changing the criteria or timeframe.
+""",
+            "table": None
+        }
 
 
-    df = pd.DataFrame(result)
+    df = pd.DataFrame(data)
 
 
-    response = f"""
+    text = f"""
 ## PulseTrade AI Analysis
 
-Question:
+**Question analyzed**
+
 {question}
 
 
-### Observation
+**Observation**
 
 The analysis returned {len(df)} matching records.
 
+The results below are based on historical market data
+available in the semantic layer.
 
-### Results
 
+**Interpretation**
+
+The metrics indicate observed market behavior.
+They should be considered historical observations
+and not investment recommendations.
 """
 
 
-    response += df.to_markdown(
-        index=False
-    )
-
-
-    response += """
-
-### Interpretation
-
-The results show observed market behavior
-based on available technical indicators.
-
-This is historical analysis and not investment advice.
-"""
-
-
-    return response
+    return {
+        "text": text,
+        "table": df
+    }

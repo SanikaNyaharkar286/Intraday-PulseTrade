@@ -17,6 +17,9 @@ def execute_query(sql, parameters=None):
             elif isinstance(value, int):
                 param_type = "INT64"
 
+            elif isinstance(value, date):
+                param_type = "DATE"
+
             else:
                 param_type = "STRING"
 
