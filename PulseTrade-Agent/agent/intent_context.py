@@ -1,6 +1,4 @@
 from typing import Literal
-
-
 BehaviorIntent = Literal[
     "gap_screening",
     "vwap_hold_analysis",
@@ -30,173 +28,93 @@ SignalIntent = Literal[
     "timeframe_signal_analysis"
 ]
 SIGNAL_KEYWORDS = {
-
     "MACD bullish": 
         "MACD_BULLISH_CROSSOVER",
-
     "MACD bearish":
         "MACD_BEARISH_CROSSOVER",
-
     "EMA bullish":
         "EMA_BULLISH_CROSSOVER",
-
     "EMA bearish":
         "EMA_BEARISH_CROSSOVER",
-
     "above VWAP":
         "VWAP_CROSS_UP",
-
     "below VWAP":
         "VWAP_CROSS_DOWN",
-
     "breaking highs":
         "DAY_HIGH_BREAKOUT",
-
     "breakout":
         "DAY_HIGH_BREAKOUT",
-
     "breaking lows":
         "DAY_LOW_BREAKDOWN",
-
     "high volume breakout":
         "VOLUME_BREAKOUT"
 }
-
 INTENT_CONTEXT = """
 
-============================================================
 PULSETRADE AI INTENT ROUTING
-============================================================
-
-
 Your responsibility:
-
 Understand the user's question,
 identify the financial analysis intent,
 and select the correct semantic data source.
-
-
 Never directly query raw datasets.
-
 Always use the semantic tables defined below.
-
 """
-
 INTENT_CONTEXT += """
 Intraday behavior screening:
-
 Use analyze_intraday_behavior for:
 - Which stocks showed VWAP holding?
 - Which stocks had breakout behavior?
 - Which stocks had gap movements?
-
 For individual stock movement:
 Use analyze_intraday_history.
-============================================================
+
 1. CURRENT MARKET ANALYSIS
-============================================================
-
-
 Purpose:
-
 Answer questions about the latest market condition
 of stocks.
-
-
 Use table:
-
 spot_ai_current_market_state
-
-
 Use when user asks about:
-
-
 Current price
-
 Keywords:
-
 - current price
 - latest price
 - today's price
 - now
-
-
 Required fields:
-
 symbol
 close
 trade_date
-
-
-
-------------------------------------------------------------
-
-
 Momentum analysis
-
-
 Keywords:
-
 - momentum
 - strong momentum
 - weak momentum
 - trending stocks
-
-
 Use fields:
-
 symbol
 momentum_score
 trend
 rsi_14
-
-
-
-------------------------------------------------------------
-
-
 RSI analysis
-
-
 Keywords:
-
 - RSI
 - oversold
 - overbought
-
-
 Use fields:
-
 symbol
 rsi_14
 trend
-
-
-
 Interpretation:
-
 RSI < 30:
 Potential oversold condition
-
-
 RSI > 70:
 Potential overbought condition
-
-
-
-------------------------------------------------------------
-
-
 Volume analysis
-
-
 Keywords:
-
 - unusual volume
 - high volume
 - volume spike
-
-
 Use fields:
 
 symbol
@@ -472,62 +390,28 @@ Keywords:
 Signal mapping:
 
 DAY_LOW_BREAKDOWN
-
-
-
-------------------------------------------------------------
-
-
 VWAP signals
-
-
 Keywords:
-
 - crossed VWAP
 - VWAP breakout
-
-
 Signal mapping:
-
-
 Above VWAP:
-
 VWAP_CROSS_UP
-
-
 Below VWAP:
-
 VWAP_CROSS_DOWN
-
-
-
-------------------------------------------------------------
-
-
 Volume breakout
-
-
 Keywords:
-
 - volume breakout
 - unusual volume signal
-
-
 Signal mapping:
-
 VOLUME_BREAKOUT
-
-
-
 """
 INTENT_CONTEXT += """
 3. INTRADAY PRICE ANALYSIS
-
 Purpose:
 Analyze intraday price movement and indicators.
 Use table:
 spot_ai_intraday_history_90d
-
 Use when user asks:
 - intraday movement
 - 5 minute analysis
