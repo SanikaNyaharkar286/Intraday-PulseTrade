@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import time
 
-#basically this lets paython work with files path
+#basically this lets python work with files path
 from google.cloud import bigquery
 
 #get configuration form config.py
@@ -82,9 +82,10 @@ def get_bq_client():
 
 def _sql_string(value):
     return "'" + str(value).replace("'", "''") + "'"
-
+#Converts a value to text and escapes single quotes.
 
 #FUNCTION prepare your sql before sending them to bigquery
+#It replaces placeholders with real project and filtering values.
 def _render_sql(
     sql,
     scope_symbol=None,
@@ -102,6 +103,7 @@ def _render_sql(
                 )
                 AND TIMESTAMP({_sql_string(scope_end)})
         """
+        #the above query is writte n to get rolling indicators values for calculation
 
         candidate_filter = f"""
         b.symbol = {_sql_string(scope_symbol)}
@@ -109,6 +111,8 @@ def _render_sql(
                 TIMESTAMP({_sql_string(scope_start)})
                 AND TIMESTAMP({_sql_string(scope_end)})
         """
+        #records that actually need recalculation
+        #     Limits the final output to the requested new/affected range.
 
     else:
         source_filter = ""
@@ -129,6 +133,7 @@ def _render_sql(
     for key, value in values.items():
         sql = sql.replace(
             "{{" + key + "}}",
+            #Finds placeholders in the SQL and replaces them.
             value
         )
 
@@ -144,7 +149,7 @@ def _run_sql_file(
     scope_start=None,
     scope_end=None
 ):
-    sql_path = (
+    sql_path = ( # sql file path builder
         Path(__file__).parent
         / "sql"
         / file_name
@@ -164,172 +169,24 @@ def _run_sql_file(
     get_bq_client().query(
         sql
     ).result()     #wait until the bigwuery finish exectuing it
-
+"""
+Find SQL file
+   ↓
+Read it
+   ↓
+Fill in real values
+   ↓
+Run it in BigQuery
+"""
 
 def _query_one(query):
     rows = (
         get_bq_client()
         .query(query)
         .result()
-    )
+    )# will return first row only
 
     return next(iter(rows), None)
-
-
-#how many data is there in bronze table and silver
-def _print_bronze_summary():
-    table_id = f"{PROJECT_ID}.{BRONZE_DATASET}.{BRONZE_TABLE}"
-
-    try:
-        table = get_bq_client().get_table(table_id)
-
-    except Exception as e:
-        print(f"Bronze summary unavailable: {e}")
-        return
-
-    audit_query = f"""
-    SELECT
-        COUNTIF(pipeline_type = "HISTORICAL" AND status = "SUCCESS")
-            AS historical_months_loaded,
-
-        COUNTIF(pipeline_type = "INCREMENTAL" AND status = "SUCCESS")
-            AS incremental_files_loaded,
-
-        SUM(IF(status = "SUCCESS", rows_processed, 0))
-            AS audited_rows_loaded
-
-    FROM `{PROJECT_ID}.{AUDIT_DATASET}.{AUDIT_TABLE}`
-    """
-
-    audit_row = None
-
-    try:
-        audit_row = _query_one(audit_query)
-
-    except Exception as e:
-        print(f"Bronze audit summary unavailable: {e}")
-
-    print("Silver input Bronze summary")
-    print(f"  Bronze rows: {_format_int(table.num_rows)}")
-
-    if audit_row:
-        print(
-            "  historical months loaded: "
-            f"{_format_int(audit_row['historical_months_loaded'])}"
-        )
-
-        print(
-            "  incremental files loaded: "
-            f"{_format_int(audit_row['incremental_files_loaded'])}"
-        )
-
-        print(
-            "  audited rows loaded: "
-            f"{_format_int(audit_row['audited_rows_loaded'])}"
-        )
-
-    print(
-        "  Silver processes BigQuery rows, not CSV files. "
-        "File counts come from Bronze audit."
-    )
-
-
-def _print_silver_summary():
-    query = f"""
-    SELECT
-        "silver_intraday_1m" AS table_name,
-        COUNT(*) AS rows_total,
-        COUNT(DISTINCT symbol) AS symbols_total,
-        COUNT(DISTINCT trade_date) AS trade_dates_total,
-        MIN(trade_date) AS first_trade_date,
-        MAX(trade_date) AS last_trade_date
-
-    FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_intraday_1m`
-
-    UNION ALL
-
-    SELECT
-        "silver_intraday_5m" AS table_name,
-        COUNT(*) AS rows_total,
-        COUNT(DISTINCT symbol) AS symbols_total,
-        COUNT(DISTINCT trade_date) AS trade_dates_total,
-        MIN(trade_date) AS first_trade_date,
-        MAX(trade_date) AS last_trade_date
-
-    FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_intraday_5m`
-
-    UNION ALL
-
-    SELECT
-        "silver_daily_stock" AS table_name,
-        COUNT(*) AS rows_total,
-        COUNT(DISTINCT symbol) AS symbols_total,
-        COUNT(DISTINCT trade_date) AS trade_dates_total,
-        MIN(trade_date) AS first_trade_date,
-        MAX(trade_date) AS last_trade_date
-
-    FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_daily_stock`
-    """
-
-    rows = (
-        get_bq_client()
-        .query(query)
-        .result()
-    )
-
-    print("Silver output summary")
-
-    for row in rows:
-        print(
-            "  "
-            f"{row['table_name']}: "
-            f"rows={_format_int(row['rows_total'])}, "
-            f"symbols={_format_int(row['symbols_total'])}, "
-            f"dates={_format_int(row['trade_dates_total'])}, "
-            f"range={_format_ts(row['first_trade_date'])} "
-            f"to {_format_ts(row['last_trade_date'])}"
-        )
-
-
-def _print_latest_silver_audit():
-    query = f"""
-    SELECT
-        run_id,
-        run_start_time,
-        run_end_time,
-        status,
-        records_read,
-        records_processed,
-        records_inserted,
-        records_rejected,
-        records_duplicate,
-        error_message
-
-    FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_audit`
-
-    ORDER BY run_start_time DESC
-    LIMIT 1
-    """
-
-    row = _query_one(query)
-
-    if not row:
-        print("Silver audit summary unavailable")
-        return
-
-    print("Latest Silver audit")
-    print(f"  run_id: {row['run_id']}")
-    print(f"  status: {row['status']}")
-    print(f"  start: {_format_ts(row['run_start_time'])}")
-    print(f"  end: {_format_ts(row['run_end_time'])}")
-    print(f"  records read: {_format_int(row['records_read'])}")
-    print(f"  records processed: {_format_int(row['records_processed'])}")
-    print(f"  records inserted: {_format_int(row['records_inserted'])}")
-    print(f"  records rejected: {_format_int(row['records_rejected'])}")
-    print(f"  records duplicate: {_format_int(row['records_duplicate'])}")
-
-    if row["error_message"]:
-        print(f"  error: {row['error_message']}")
 
 #THIS FUNCTION IS FOR MONITORING BIGQUERY JOBS AND WAIT UNTIL IT FINSIH 
 #this function is used to run the sql file and wait until bigquery finish executing it
@@ -345,20 +202,21 @@ def _wait_for_job_with_progress(job, label):
             datetime.now(timezone.utc) - started_at
         ).total_seconds() / 60
 
-        print(
+        """print(
             f"{label} still running: "
             f"{elapsed_minutes:.1f} minutes elapsed"
-        )
+        )"""
 
         time.sleep(60)
 
-        #check again
+        #check again/refreshes the job status gtom bigquery
         job.reload()
 
     #if job is done retunr the result
     result = job.result()
 
     ended_at = datetime.now(timezone.utc)
+    #Records when the job ended.
 
     elapsed_minutes = (
         ended_at - started_at
@@ -400,24 +258,22 @@ def run_silver_pipeline(
         scope_end=scope_end
     )
 
-    print("=" * 60)
+    """print("=" * 60)
     print("Silver pipeline starting")
-    print("=" * 60)
-
+    print("=" * 60)"""
+    #checker for incremental 
     if scope_symbol and scope_start and scope_end:
         print("Silver incremental scope")
         print(f"  symbol: {scope_symbol}")
         print(f"  start: {scope_start}")
         print(f"  end: {scope_end}")
 
-    _print_bronze_summary()
-
     procedure_id = (
         f"`{PROJECT_ID}."
         f"{SILVER_DATASET}."
         "sp_bronze_to_silver`"
     )
-
+    #Calls the stored procedure in BigQuery.
     job = get_bq_client().query(
         f"CALL {procedure_id}()"
     )
@@ -430,11 +286,6 @@ def run_silver_pipeline(
     print(
         "Silver pipeline completed"
     )
-
-    _print_latest_silver_audit()
-
-    # Disabled to avoid full-table COUNT(*) scans on large Silver tables.
-    # _print_silver_summary()
 
     if RUN_GOLD_AFTER_SILVER:
         from transform.gold.gold import run_gold_pipeline

@@ -523,7 +523,8 @@ def process_historical_month(
 ):
     ensure_audit_table()
     ensure_bronze_table()
-
+#
+#Creates a unique ID for this processing run.
     batch_id = (
         f"{batch_prefix}_{year}_{month:02d}_"
         f"{uuid.uuid4().hex[:8]}"
