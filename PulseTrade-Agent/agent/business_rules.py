@@ -1,8 +1,8 @@
 DATA_TIME_RULES = """
 
-================================================
+
 HISTORICAL DATA HANDLING
-================================================
+
 
 
 PulseTrade AI does not use live market data.
@@ -70,9 +70,9 @@ unless mapped before querying.
 """
 BUSINESS_RULES = """
 
-============================================================
+
 PULSETRADE AI BUSINESS INTERPRETATION RULES
-============================================================
+
 
 
 Purpose:
@@ -127,7 +127,6 @@ Oversold does NOT mean the stock will increase.
 
 
 
-------------------------------------------------------------
 
 
 RSI between 30 and 70:
@@ -136,7 +135,6 @@ Indicates neutral momentum conditions.
 
 
 
-------------------------------------------------------------
 
 
 RSI > 70:
@@ -157,9 +155,9 @@ Overbought does NOT mean the stock must decline.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 MOMENTUM SCORE INTERPRETATION
-============================================================
+
 
 
 Metric:
@@ -203,9 +201,9 @@ Momentum strength does not guarantee future returns.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 TREND INTERPRETATION
-============================================================
+
 
 
 Metrics:
@@ -254,9 +252,9 @@ not future prediction.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 VWAP INTERPRETATION
-============================================================
+
 
 
 Metric:
@@ -304,9 +302,9 @@ VWAP positioning is an intraday indicator only.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 VOLUME INTERPRETATION
-============================================================
+
 
 
 Metrics:
@@ -358,9 +356,9 @@ High volume alone does not indicate price direction.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 RETURN INTERPRETATION
-============================================================
+
 
 
 Metrics:
@@ -409,9 +407,9 @@ Historical returns do not predict future returns.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 VOLATILITY INTERPRETATION
-============================================================
+
 
 
 Metrics:
@@ -456,9 +454,9 @@ not guaranteed profit or loss.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 TECHNICAL SIGNAL INTERPRETATION
-============================================================
+
 
 
 MACD_BULLISH_CROSSOVER:
@@ -473,7 +471,7 @@ Potential bullish momentum change.
 
 
 
-------------------------------------------------------------
+
 
 
 MACD_BEARISH_CROSSOVER:
@@ -488,7 +486,7 @@ Potential bearish momentum change.
 
 
 
-------------------------------------------------------------
+
 
 
 EMA_BULLISH_CROSSOVER:
@@ -505,7 +503,7 @@ Possible strengthening trend.
 
 
 
-------------------------------------------------------------
+
 
 
 EMA_BEARISH_CROSSOVER:
@@ -522,7 +520,7 @@ Possible weakening trend.
 
 
 
-------------------------------------------------------------
+
 
 
 DAY_HIGH_BREAKOUT:
@@ -539,7 +537,7 @@ Possible upward momentum event.
 
 
 
-------------------------------------------------------------
+
 
 
 DAY_LOW_BREAKDOWN:
@@ -556,7 +554,7 @@ Possible weakness event.
 
 
 
-------------------------------------------------------------
+
 
 
 VWAP_CROSS_UP:
@@ -573,7 +571,7 @@ Possible intraday strength.
 
 
 
-------------------------------------------------------------
+
 
 
 VWAP_CROSS_DOWN:
@@ -590,7 +588,7 @@ Possible intraday weakness.
 
 
 
-------------------------------------------------------------
+
 
 
 VOLUME_BREAKOUT:
@@ -610,9 +608,9 @@ Increased market participation.
 """
 BUSINESS_RULES += """
 
-============================================================
+
 RESPONSE INTERPRETATION RULES
-============================================================
+
 
 
 Always explain:

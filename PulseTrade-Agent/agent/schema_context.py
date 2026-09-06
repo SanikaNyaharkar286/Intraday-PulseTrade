@@ -76,7 +76,7 @@ Trading date for the market snapshot.
 
 
 
-------------------------------------------------------------
+
 
 
 timestamp
@@ -90,7 +90,7 @@ Timestamp when the market snapshot was recorded.
 
 
 
-------------------------------------------------------------
+
 
 
 close
@@ -104,7 +104,7 @@ Latest closing price of the stock.
 
 
 
-------------------------------------------------------------
+
 
 
 day_return_pct
@@ -118,7 +118,7 @@ Percentage price return for the trading day.
 
 
 
-------------------------------------------------------------
+
 
 
 volume
@@ -132,7 +132,6 @@ Total traded volume for the stock.
 
 
 
-------------------------------------------------------------
 
 
 relative_volume
@@ -148,7 +147,7 @@ Higher values indicate unusual trading activity.
 
 
 
-------------------------------------------------------------
+
 
 
 rsi_14
@@ -164,7 +163,7 @@ Used as a momentum measurement.
 
 
 
-------------------------------------------------------------
+
 
 
 macd
@@ -180,7 +179,7 @@ Used for momentum and trend analysis.
 
 
 
-------------------------------------------------------------
+
 
 
 macd_signal
@@ -196,7 +195,7 @@ Used for MACD comparison analysis.
 
 
 
-------------------------------------------------------------
+
 
 
 ema_9
@@ -212,7 +211,7 @@ Represents short-term price trend.
 
 
 
-------------------------------------------------------------
+
 
 
 ema_20
@@ -228,7 +227,7 @@ Represents medium-term price trend.
 
 
 
-------------------------------------------------------------
+
 
 
 vwap
@@ -244,7 +243,6 @@ Represents the average price weighted by trading volume.
 
 
 
-------------------------------------------------------------
 
 
 price_vs_vwap
@@ -258,7 +256,7 @@ Relationship between current price and VWAP.
 
 
 
-------------------------------------------------------------
+
 
 
 price_vs_ema20
@@ -272,7 +270,7 @@ Relationship between current price and EMA20.
 
 
 
-------------------------------------------------------------
+
 
 
 price_vs_sma20
@@ -286,7 +284,7 @@ Relationship between current price and SMA20.
 
 
 
-------------------------------------------------------------
+
 
 
 volume_status
@@ -300,7 +298,7 @@ Categorical classification of current volume condition.
 
 
 
-------------------------------------------------------------
+
 
 
 trend
@@ -314,7 +312,7 @@ Current stock trend classification.
 
 
 
-------------------------------------------------------------
+
 
 
 momentum_score
@@ -330,7 +328,7 @@ Higher values represent stronger momentum.
 
 
 
-------------------------------------------------------------
+
 
 
 processed_at
@@ -349,9 +347,9 @@ Used for data freshness tracking.
 """
 SIGNAL_HISTORY_SCHEMA = """
 
-============================================================
+
 TABLE: spot_ai_signal_history_90d
-============================================================
+
 
 
 Purpose:
@@ -399,7 +397,7 @@ Five minute candle timeframe.
 
 
 
-------------------------------------------------------------
+
 
 
 signal_type
@@ -426,7 +424,7 @@ Examples of signal categories:
 
 
 
-------------------------------------------------------------
+
 
 
 signal_value
@@ -443,7 +441,7 @@ calculated by the pipeline.
 
 
 
-------------------------------------------------------------
+
 
 
 reference_value
@@ -458,7 +456,7 @@ the signal condition.
 
 
 
-------------------------------------------------------------
+
 
 
 processed_at

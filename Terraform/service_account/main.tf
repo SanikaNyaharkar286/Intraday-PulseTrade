@@ -15,3 +15,4 @@ resource "google_project_iam_member" "bigquery_admin" {
   role    = "roles/bigquery.admin"
   member  = "serviceAccount:${google_service_account.migration.email}"
 }
+
