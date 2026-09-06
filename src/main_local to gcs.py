@@ -1,11 +1,14 @@
 import tempfile
-
+# this is used to create a temp folder as we did not want to stor the files i=on our local system
+#because-500 stocks × large files = huge disk usage.
 from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed
 )
+#used 4 workers for parallel processing in configs
 
 from pathlib import Path
+#used for path reading
 
 from src.ingestion.source_reader import (
     get_csv_members,
@@ -30,7 +33,7 @@ logger = get_logger(
     "pulsetrade"
 )
 
-
+#This function processes one stock file.
 def process_zip_member(
     zip_path: Path,
     member: str
@@ -64,24 +67,24 @@ def process_zip(
     logger.info(
         "Found %s stock CSV files",
         len(members)
-    )
+    )#It logs how many stock files were found.
 
     reports = []
 
-    with ThreadPoolExecutor(
+    with ThreadPoolExecutor( #creates several workers so multiple files can be processed in parallel.
         max_workers=MAX_WORKERS
     ) as executor:
 
         futures = {
             executor.submit(
-                process_zip_member,
+                process_zip_member,#Each worker runs process_zip_member(zip_path, member)
                 zip_path,
                 member
             ): member
             for member in members
         }
 
-        for future in as_completed(
+        for future in as_completed(#receives results whenever a file finishes, regardless of order.
             futures
         ):
 
@@ -137,7 +140,7 @@ def main():
     reports = process_zip(
         source
     )
-
+#Creates a new list containing only failed reports.
     failed = [
         report
         for report in reports
@@ -161,7 +164,7 @@ def main():
 
     logger.info(
         "Total stocks: %s",
-        len(reports)
+        len(reports)#success
     )
 
     logger.info(

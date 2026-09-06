@@ -24,7 +24,7 @@ def get_csv_members(
                 .endswith(".csv")
             )
         ]
-
+#takes only .csv files
 
 def extract_member(
     zip_path: Path,
@@ -41,7 +41,7 @@ def extract_member(
             destination /
             Path(member_name).name
         )
-
+#keeps only the filename, removing any folders inside the ZIP.
         with zip_file.open(
             member_name
         ) as source:
@@ -50,7 +50,7 @@ def extract_member(
                 target,
                 "wb"
             ) as output:
-
+#A new file is created in the destination folder.
                 shutil.copyfileobj(
                     source,
                     output,

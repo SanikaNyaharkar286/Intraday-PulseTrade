@@ -91,11 +91,11 @@ def _delete_temp_tables(*table_ids):
             )
 
 #count the rows in the table and return the total count 
-def _rows_in_table(table_id):
-    query = f"""
+"""def _rows_in_table(table_id):
+    query = f
     SELECT COUNT(*) AS total
     FROM `{table_id}`
-    """
+   
 
     count_result = (
         get_bq_client()
@@ -104,7 +104,7 @@ def _rows_in_table(table_id):
     )
 
     return list(count_result)[0]["total"]
-
+"""
 
 def _merge_to_bronze(staging_table):
     #merge the staging table to bronze table if record is already there update or insert 
@@ -156,7 +156,7 @@ def _merge_to_bronze(staging_table):
         merge_query
     ).result()
 
-
+# historical context
 def _run_silver_pipeline(
     scope_symbol=None,
     scope_start=None,
@@ -170,7 +170,11 @@ def _run_silver_pipeline(
         scope_end=scope_end
     )
 
-
+#Finds which stock and time range are present in a staging table.
+"""
+the program can process only RELIANCE for that date range instead of processing 
+every stock and every date again.
+"""
 def _incremental_scope_from_table(staging_table):
     query = f"""
     SELECT
@@ -204,7 +208,17 @@ def _incremental_scope_from_table(staging_table):
         "end": row["scope_end"].isoformat(),
     }
 
+"""
+An audit table stores information about each pipeline run, such as:
 
+Which batch was processed
+Whether it was historical or incremental
+When it ran
+Which file and month were processed
+Whether it succeeded or failed
+How many rows were processed
+Any error message
+"""
 def ensure_audit_table():
     client = get_bq_client()
 
@@ -321,7 +335,8 @@ def insert_audit(
         @message
     )
     """
-
+# Starts a list of values that the SQL query will use.
+# value formating
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
             bigquery.ScalarQueryParameter(
@@ -366,7 +381,7 @@ def insert_audit(
             ),
         ]
     )
-
+#tells BigQuery the expected data type
     try:
         get_bq_client().query(
             query,
@@ -399,7 +414,7 @@ def ensure_bronze_table():
 
     dataset = bigquery.Dataset(
         dataset_id
-    )
+    )#Creates a Python object representing the BigQuery dataset.
 
     dataset.location = get_bq_client().location
 

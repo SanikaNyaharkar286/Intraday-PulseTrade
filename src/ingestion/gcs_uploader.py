@@ -2,23 +2,34 @@ from datetime import datetime
 from pathlib import Path
 
 from google.cloud import storage
-
+"""
+Monthly local CSV
+→ choose GCS bucket
+→ create month name
+→ build cloud file path
+→ check whether file already exists
+→ apply upload rule: SKIP / FAIL / OVERWRITE
+→ upload file
+→ compare local and cloud file sizes
+→ return UPLOADED, SKIPPED, or error
+"""
 from src.utils.config import (
     GCP_PROJECT_ID,
     GCS_BUCKET_NAME,
     UPLOAD_MODE
 )
 
-
+"""Creates a connection to Google Cloud Storage using the configured project."""
 client = storage.Client(
     project=GCP_PROJECT_ID
 )
 
 
+
 def upload_month_file(
-    local_file: Path,
-    symbol: str,
-    year: int,
+    local_file: Path, #zip
+    symbol: str, #file name
+    year: int, 
     month: int
 ):
 
@@ -51,7 +62,7 @@ def upload_month_file(
 
     blob = bucket.blob(
         object_name
-    )
+    )#2026/August/RELIANCE.csv
 
     exists = blob.exists()
 

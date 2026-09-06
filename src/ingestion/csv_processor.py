@@ -2,7 +2,25 @@ import csv
 import tempfile
 
 from pathlib import Path
-
+"""
+Open one stock CSV
+        |
+Validate file and headers
+        |
+Read rows as dictionaries
+        |
+Takes each row
+        |
+Write rows into monthly CSV files
+        |
+Close temporary files
+        |
+Check row counts
+        |
+Upload monthly files to GCS
+        |
+Return processing report
+"""
 from src.ingestion.month_partitioner import (
     MonthlyPartitionWriter
 )
