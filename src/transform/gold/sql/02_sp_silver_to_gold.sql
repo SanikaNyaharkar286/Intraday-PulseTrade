@@ -72,11 +72,13 @@ BEGIN
     -- Note: Silver provides simplified EMA/RSI/MACD values; Gold reuses them.
     -- =====================================================
     CREATE TEMP TABLE silver_intraday_enriched AS
+    ---this is the outer query which get result from inner query
     SELECT
         * EXCEPT(previous_20_bar_avg_volume),
         previous_20_bar_avg_volume AS avg_volume_20,
         SAFE_DIVIDE(volume, previous_20_bar_avg_volume) AS relative_volume
     FROM (
+        ---inner query get data from silver_intraday and silver_daily_stock
         SELECT
             s.* EXCEPT(avg_volume_20, relative_volume),
             s.return_pct AS bar_return_pct,
@@ -84,12 +86,15 @@ BEGIN
                 s.close - d.previous_close,
                 d.previous_close
             ) * 100 AS day_return_pct,
+            ---calculate every stock and timeframe separately get the avg volume of previous 20 bars 
             AVG(s.volume) OVER (
                 PARTITION BY s.symbol, s.timeframe_key
                 ORDER BY s.timestamp
+                ---current row is excluded and calculate the avg of previous 20 rows 
                 ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING
             ) AS previous_20_bar_avg_volume
         FROM silver_intraday_source s
+        ---connect the daily stock table to get previous clsoe price 
         LEFT JOIN `{{PROJECT_ID}}.{{SILVER_DATASET}}.silver_daily_stock` d
             ON d.symbol = s.symbol
             AND d.trade_date = s.trade_date
@@ -104,6 +109,7 @@ BEGIN
     MERGE `{{PROJECT_ID}}.{{GOLD_DATASET}}.dim_stock` t
     USING (
         SELECT DISTINCT
+        ---it create unique key form each symbol 
             FARM_FINGERPRINT(symbol) AS stock_key,
             symbol
         FROM (
@@ -119,6 +125,7 @@ BEGIN
         WHERE symbol IS NOT NULL
     ) s
     ON t.symbol = s.symbol
+    ---if dim.stock table symbol is not matched silver_intraday then insert 
     WHEN NOT MATCHED THEN
         INSERT
         (
@@ -215,7 +222,7 @@ BEGIN
             s.timeframe,
             CURRENT_TIMESTAMP()
         );
-
+--delete the row in dim_timrframe where 1m and 5m are not in table 
     DELETE FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.dim_timeframe`
     WHERE timeframe NOT IN ("1M", "5M");
 
@@ -289,6 +296,9 @@ BEGIN
                 ELSE "NEUTRAL"
             END AS trend,
             (
+                ---it works like ternary operator 
+                ---condition ? value if true : value if false 
+                --- true + true+ true= 3 
                 IF(s.close > s.vwap, 1, 0)
                 + IF(s.close > s.ema_20, 1, 0)
                 + IF(s.ema_9 > s.ema_20, 1, 0)
@@ -305,6 +315,7 @@ BEGIN
             s.symbol IS NOT NULL
             AND s.timestamp IS NOT NULL
             AND (
+                ---if in gold matching row not found 
                 t.symbol IS NULL
                 OR s.silver_updated_at > t.processed_at
                 OR t.bar_return_pct IS NULL
@@ -428,7 +439,10 @@ BEGIN
     -- Source: Gold intraday metrics
     -- Purpose: Store deterministic breakout and crossover events
     -- =====================================================
+    ---fisrt we calculate which signal is generated based on metrics 
+    
     CREATE TEMP TABLE signal_candidates AS
+    --- in this we will calculate the previous valllue of each metric and compare with current value to ccreate signal 
     WITH metric_windows AS (
         SELECT
             *,
@@ -440,6 +454,7 @@ BEGIN
             MIN(low) OVER (
                 PARTITION BY symbol, trade_date, timeframe_key
                 ORDER BY timestamp
+                ---exclude current row and get the min of previous row 
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
             ) AS previous_intraday_low,
             LAG(vwap) OVER (
@@ -450,10 +465,12 @@ BEGIN
                 PARTITION BY symbol, trade_date, timeframe_key
                 ORDER BY timestamp
             ) AS previous_close_row,
+            ---ema_9 later used for cross over signal 
             LAG(ema_9) OVER (
                 PARTITION BY symbol, trade_date, timeframe_key
                 ORDER BY timestamp
             ) AS previous_ema_9,
+            ---we can know that ema_9 cross over ema_20 by comparing previous value 
             LAG(ema_20) OVER (
                 PARTITION BY symbol, trade_date, timeframe_key
                 ORDER BY timestamp
@@ -471,8 +488,10 @@ BEGIN
                 ORDER BY timestamp
             ) AS previous_relative_volume
         FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_intraday_metrics`
+        ---dynamic filter to limit the scope of signal generatio based on input 
         WHERE {{GOLD_SIGNAL_SCOPE_FILTER}}
     ),
+    ---now in metric window we have previous value of each metric and now we can compare current value 
     signals AS (
         SELECT
             stock_key,
@@ -624,10 +643,12 @@ BEGIN
         FROM metric_windows
         WHERE IFNULL(previous_relative_volume, 0) <= 2
             AND relative_volume > 2
-    )
+    )---close the Signal CTE 
+    ---now inside signal all 9 type of signal are combine  
     SELECT
-        TO_HEX(
-            MD5(
+    ---now for every signal unique id will generate 
+        TO_HEX(  ---convert hash to hexdecimal string 
+            MD5(   --- convert text into the hash 
                 CONCAT(
                     symbol,
                     "|",
@@ -638,10 +659,10 @@ BEGIN
                     signal_type
                 )
             )
-        ) AS signal_id,
+        ) AS signal_id,      ---create the signal id 
         *
     FROM signals;
-
+    ---delete the row from gold table where volumn breakout 
     DELETE FROM `{{PROJECT_ID}}.{{GOLD_DATASET}}.fact_intraday_signals` t
     WHERE t.signal_type = "VOLUME_BREAKOUT"
         AND {{GOLD_SIGNAL_DELETE_SCOPE_FILTER}}
