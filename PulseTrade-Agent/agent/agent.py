@@ -8,7 +8,7 @@ from tools.behavior import analyze_intraday_behavior
 from tools.intraday import analyze_intraday_history
 from tools.ranking import analyze_stock_ranking
 from tools.daily import analyze_daily_history
-from tools.symbol_lookup import resolve_symbol
+#from tools.symbol_lookup import resolve_symbol
 
 
 root_agent = Agent(
@@ -27,7 +27,7 @@ root_agent = Agent(
         analyze_stock_ranking,
         analyze_daily_history,
         analyze_stock_comparison,
-        resolve_symbol
+        
 
     ]
 )

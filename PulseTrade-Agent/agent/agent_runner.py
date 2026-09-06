@@ -5,7 +5,7 @@ from google.genai import types
 from agent.agent import root_agent
 
 
-APP_NAME = "pulsetrade_ai"
+APP_NAME = "PulseTrade-Agent.agent"
 
 
 session_service = InMemorySessionService()
