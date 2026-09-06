@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-import re
-import uuid
+import re    #used for regex operation
+import uuid     #unique batch id for each run 
 
 from google.cloud import bigquery
 
@@ -63,7 +63,7 @@ def _table_id(dataset, table):
 def _quoted_table_id(dataset, table):
     return f"`{_table_id(dataset, table)}`"
 
-
+#bigquery table name should not have special char so this function will repalce 
 def _safe_table_suffix(value):
     return re.sub(
         r"[^A-Za-z0-9_]",
@@ -71,7 +71,15 @@ def _safe_table_suffix(value):
         value
     )
 
+#want to normalize the symbol by removing the data 
+def _normalize_symbol(symbol):
+    return re.sub(
+        r"_[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        "",
+        str(symbol)
+    )
 
+#after processing the month we can delete the temp table which create the stging 
 def _delete_temp_tables(*table_ids):
     client = get_bq_client()
 
@@ -82,7 +90,7 @@ def _delete_temp_tables(*table_ids):
                 not_found_ok=True
             )
 
-
+#count the rows in the table and return the total count 
 def _rows_in_table(table_id):
     query = f"""
     SELECT COUNT(*) AS total
@@ -99,7 +107,9 @@ def _rows_in_table(table_id):
 
 
 def _merge_to_bronze(staging_table):
+    #merge the staging table to bronze table if record is already there update or insert 
     merge_query = f"""
+    
     MERGE {_quoted_table_id(BRONZE_DATASET, BRONZE_TABLE)} T
 
     USING `{staging_table}` S
@@ -189,7 +199,7 @@ def _incremental_scope_from_table(staging_table):
         return None
 
     return {
-        "symbol": row["symbols"][0],
+        "symbol": _normalize_symbol(row["symbols"][0]),
         "start": row["scope_start"].isoformat(),
         "end": row["scope_end"].isoformat(),
     }
@@ -440,7 +450,7 @@ def ensure_bronze_table():
         type_=bigquery.TimePartitioningType.DAY,
         field="timestamp"
     )
-
+#clustring is used to sort the data based on the fields so that it can be queried faster 
     table.clustering_fields = [
         "symbol",
         "timestamp",
@@ -582,7 +592,7 @@ def process_historical_month(
                     _FILE_NAME,
                     r'/([^/]+)\\.csv$'
                 ),
-                r'_\\d{4}-\\d{2}-\\d{2}$',
+                r'_[0-9]{4}-[0-9]{2}-[0-9]{2}$',
                 ''
             ) AS symbol
 
@@ -762,7 +772,7 @@ def process_new_file(file_path):
                     _FILE_NAME,
                     r'/([^/]+)\\.csv$'
                 ),
-                r'_\\d{4}-\\d{2}-\\d{2}$',
+                r'_[0-9]{4}-[0-9]{2}-[0-9]{2}$',
                 ''
             ) AS symbol
 

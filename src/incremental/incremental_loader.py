@@ -9,6 +9,7 @@ def run_incremental(file_path):
         raise ValueError(
             "file_path is required"
         )
+#only csv file will be processed other file get igonre 
 
     if not file_path.lower().endswith(".csv"):
 
@@ -23,7 +24,7 @@ def run_incremental(file_path):
         f"Incremental file received: "
         f"{file_path}"
     )
-
+#it says like bronze module will process the new files 
     process_new_file(
         file_path
     )

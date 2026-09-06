@@ -1,11 +1,12 @@
+
 from pathlib import Path
 from datetime import datetime, timezone
 import time
 
-#basically this lets paython work with files path 
+#basically this lets paython work with files path
 from google.cloud import bigquery
 
-#get configuration form config.py 
+#get configuration form config.py
 from transform.config import (
     AUDIT_DATASET,
     AUDIT_TABLE,
@@ -17,8 +18,9 @@ from transform.config import (
     SILVER_DATASET,
 )
 
-#create empty bigquery client var 
-#at initial stage is no connection 
+
+#create empty bigquery client var
+#at initial stage is no connection
 _bq_client = None
 _bq_location = None
 
@@ -36,32 +38,36 @@ def _format_ts(value):
 
     return str(value)
 
-#finds where bronze dataset is located 
-#THIS function finds where the dataset location 
+
+#finds where bronze dataset is located
+#THIS function finds where the dataset location
 def get_bq_location():
     global _bq_location
 
-    #if not then create the connection get project id 
+    #if not then create the connection get project id
     if _bq_location is None:
-        #create bigquery connection 
+        #create bigquery connection
         metadata_client = bigquery.Client(
             project=PROJECT_ID
         )
 
-        #try to get the bronze dataset  info 
+        #try to get the bronze dataset info
         try:
             dataset = metadata_client.get_dataset(
                 f"{PROJECT_ID}.{BRONZE_DATASET}"
             )
-            #save loction to the var 
+
+            #save loction to the var
             _bq_location = dataset.location
-        #if dataset not found throw exception 
+
+        #if dataset not found throw exception
         except Exception:
             _bq_location = BQ_LOCATION
 
     return _bq_location
 
-#this function provide the bigquery cliennt 
+
+#this function provide the bigquery cliennt
 def get_bq_client():
     global _bq_client
 
@@ -73,11 +79,12 @@ def get_bq_client():
 
     return _bq_client
 
+
 def _sql_string(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
-#FUNCTION prepare your sql before sending them to bigquery 
+#FUNCTION prepare your sql before sending them to bigquery
 def _render_sql(
     sql,
     scope_symbol=None,
@@ -85,6 +92,7 @@ def _render_sql(
     scope_end=None
 ):
     if scope_symbol and scope_start and scope_end:
+
         source_filter = f"""
         WHERE symbol = {_sql_string(scope_symbol)}
             AND timestamp BETWEEN
@@ -106,7 +114,7 @@ def _render_sql(
         source_filter = ""
         candidate_filter = "TRUE"
 
-    #replace the value with real values 
+    #replace the value with real values
     values = {
         "PROJECT_ID": PROJECT_ID,
         "BQ_LOCATION": get_bq_location(),
@@ -116,7 +124,8 @@ def _render_sql(
         "BRONZE_SOURCE_FILTER": source_filter,
         "BRONZE_CANDIDATE_FILTER": candidate_filter,
     }
-#goes through each configuration values 
+
+    #goes through each configuration values
     for key, value in values.items():
         sql = sql.replace(
             "{{" + key + "}}",
@@ -125,9 +134,10 @@ def _render_sql(
 
     return sql
 
-#run and find the sql file 
-#create silver table 
-#store procdure sql present in sql folder 
+
+#run and find the sql file
+#create silver table
+#store procdure sql present in sql folder
 def _run_sql_file(
     file_name,
     scope_symbol=None,
@@ -139,19 +149,21 @@ def _run_sql_file(
         / "sql"
         / file_name
     )
-#so here it read sql files 
-#replace the value with real value 
-#became the final sql 
+
+    #so here it read sql files
+    #replace the value with real value
+    #became the final sql
     sql = _render_sql(
         sql_path.read_text(),
         scope_symbol=scope_symbol,
         scope_start=scope_start,
         scope_end=scope_end
     )
-#excute the sql 
+
+    #excute the sql
     get_bq_client().query(
         sql
-    ).result()     #wait until the bigwuery finish exectuing it 
+    ).result()     #wait until the bigwuery finish exectuing it
 
 
 def _query_one(query):
@@ -164,6 +176,7 @@ def _query_one(query):
     return next(iter(rows), None)
 
 
+#how many data is there in bronze table and silver
 def _print_bronze_summary():
     table_id = f"{PROJECT_ID}.{BRONZE_DATASET}.{BRONZE_TABLE}"
 
@@ -178,10 +191,13 @@ def _print_bronze_summary():
     SELECT
         COUNTIF(pipeline_type = "HISTORICAL" AND status = "SUCCESS")
             AS historical_months_loaded,
+
         COUNTIF(pipeline_type = "INCREMENTAL" AND status = "SUCCESS")
             AS incremental_files_loaded,
+
         SUM(IF(status = "SUCCESS", rows_processed, 0))
             AS audited_rows_loaded
+
     FROM `{PROJECT_ID}.{AUDIT_DATASET}.{AUDIT_TABLE}`
     """
 
@@ -201,10 +217,12 @@ def _print_bronze_summary():
             "  historical months loaded: "
             f"{_format_int(audit_row['historical_months_loaded'])}"
         )
+
         print(
             "  incremental files loaded: "
             f"{_format_int(audit_row['incremental_files_loaded'])}"
         )
+
         print(
             "  audited rows loaded: "
             f"{_format_int(audit_row['audited_rows_loaded'])}"
@@ -225,6 +243,7 @@ def _print_silver_summary():
         COUNT(DISTINCT trade_date) AS trade_dates_total,
         MIN(trade_date) AS first_trade_date,
         MAX(trade_date) AS last_trade_date
+
     FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_intraday_1m`
 
     UNION ALL
@@ -236,6 +255,7 @@ def _print_silver_summary():
         COUNT(DISTINCT trade_date) AS trade_dates_total,
         MIN(trade_date) AS first_trade_date,
         MAX(trade_date) AS last_trade_date
+
     FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_intraday_5m`
 
     UNION ALL
@@ -247,6 +267,7 @@ def _print_silver_summary():
         COUNT(DISTINCT trade_date) AS trade_dates_total,
         MIN(trade_date) AS first_trade_date,
         MAX(trade_date) AS last_trade_date
+
     FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_daily_stock`
     """
 
@@ -283,7 +304,9 @@ def _print_latest_silver_audit():
         records_rejected,
         records_duplicate,
         error_message
+
     FROM `{PROJECT_ID}.{SILVER_DATASET}.silver_audit`
+
     ORDER BY run_start_time DESC
     LIMIT 1
     """
@@ -308,13 +331,15 @@ def _print_latest_silver_audit():
     if row["error_message"]:
         print(f"  error: {row['error_message']}")
 
-
+#THIS FUNCTION IS FOR MONITORING BIGQUERY JOBS AND WAIT UNTIL IT FINSIH 
+#this function is used to run the sql file and wait until bigquery finish executing it
 def _wait_for_job_with_progress(job, label):
     started_at = datetime.now(timezone.utc)
 
     print(f"{label} BigQuery job id: {job.job_id}")
     print(f"{label} start time: {started_at.isoformat()}")
 
+    #job not done means still running so we wait until it finish
     while not job.done():
         elapsed_minutes = (
             datetime.now(timezone.utc) - started_at
@@ -327,10 +352,14 @@ def _wait_for_job_with_progress(job, label):
 
         time.sleep(60)
 
+        #check again
         job.reload()
 
+    #if job is done retunr the result
     result = job.result()
+
     ended_at = datetime.now(timezone.utc)
+
     elapsed_minutes = (
         ended_at - started_at
     ).total_seconds() / 60
@@ -340,133 +369,13 @@ def _wait_for_job_with_progress(job, label):
 
     return result
 
-#
-def _reset_outdated_silver_tables():
-    client = get_bq_client()
-#indicator list our silver layer expected 
-    indicator_fields = [
-        "previous_close",
-        "return_pct",
-        "gap_pct",
-        "sma_20",
-        "ema_9",
-        "ema_20",
-        "rsi_14",
-        "macd",
-        "macd_signal",
-        "vwap",
-        "avg_volume_20",
-        "relative_volume",
-    ]
 
-    obsolete_indicator_fields = [
-        "sma_50",
-        "ema_50",
-        "macd_histogram",
-        "vwap_deviation_pct",
-        "atr_14",
-        "bb_upper",
-        "bb_middle",
-        "bb_lower",
-        "bb_width",
-        "obv",
-    ]
-
-    table_rules = {
-        "silver_intraday_1m": {
-            "clustering_fields": [
-                "symbol",
-                "timestamp",
-            ],
-            "required_fields": indicator_fields,
-        },
-        "silver_intraday_5m": {
-            "clustering_fields": [
-                "symbol",
-                "timestamp",
-            ],
-            "required_fields": indicator_fields,
-        },
-        "silver_rejects": {
-            "clustering_fields": [
-                "symbol",
-                "timestamp",
-            ],
-            "required_fields": [],
-        },
-    }
-#this script check each table one by one 
-    for table_name, rules in table_rules.items():
-        #create table id 
-        table_id = (
-            f"{PROJECT_ID}."
-            f"{SILVER_DATASET}."
-            f"{table_name}"
-        )
-
-        try:
-            table = client.get_table(
-                table_id
-            )
-
-        except Exception:
-            continue
-
-        timestamp_field = next(
-            (
-                field
-                for field in table.schema
-                if field.name == "timestamp"
-            ),
-            None
-        )
-
-        timestamp_is_outdated = (
-            timestamp_field
-            and timestamp_field.field_type != "DATETIME"
-        )
-
-        clustering_is_outdated = (
-            table.clustering_fields != rules["clustering_fields"]
-        )
-
-        field_names = {
-            field.name
-            for field in table.schema
-        }
-
-        schema_is_outdated = (
-            any(
-                field_name not in field_names
-                for field_name in rules["required_fields"]
-            )
-            or any(
-                field_name in field_names
-                for field_name in obsolete_indicator_fields
-            )
-        )
-
-        if (
-            timestamp_is_outdated
-            or clustering_is_outdated
-            or schema_is_outdated
-        ):
-            client.delete_table(
-                table_id,
-                not_found_ok=True
-            )
-
-            print(
-                f"Deleted outdated Silver table: {table_id}"
-            )
-
-
+#this function makes sure silver table and stored procedure are available
 def ensure_silver_objects(
     scope_symbol=None,
     scope_start=None,
     scope_end=None
 ):
-    _reset_outdated_silver_tables()
 
     _run_sql_file(
         "01_create_silver_tables.sql"
@@ -494,6 +403,7 @@ def run_silver_pipeline(
     print("=" * 60)
     print("Silver pipeline starting")
     print("=" * 60)
+
     if scope_symbol and scope_start and scope_end:
         print("Silver incremental scope")
         print(f"  symbol: {scope_symbol}")
@@ -522,6 +432,7 @@ def run_silver_pipeline(
     )
 
     _print_latest_silver_audit()
+
     # Disabled to avoid full-table COUNT(*) scans on large Silver tables.
     # _print_silver_summary()
 
@@ -533,3 +444,4 @@ def run_silver_pipeline(
             scope_start=scope_start,
             scope_end=scope_end
         )
+

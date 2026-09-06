@@ -1,4 +1,5 @@
 import json
+#used to read checkopoint from json file and write checkpoint to json file 
 from pathlib import Path
 
 from transform.config import (
@@ -13,11 +14,11 @@ from transform.config import (
 from transform.bronze.bronze import process_historical_month
 from transform.silver.silver import run_silver_pipeline
 
-
+#here month+year into single number so we can compare months easily 
 def _month_value(year, month):
     return (year * 12) + month
 
-
+#this function use to move on to the next month 
 def _next_month(year, month):
     month += 1
 
@@ -27,7 +28,9 @@ def _next_month(year, month):
 
     return year, month
 
-
+#checkpoint is used to keep track of last completed month and year so if we
+#  terminate the code and rerun it will start tfrom the last completed month annd year 
+#
 def _read_checkpoint():
     checkpoint_path = Path(HISTORICAL_CHECKPOINT_FILE)
 
@@ -37,7 +40,7 @@ def _read_checkpoint():
     with checkpoint_path.open("r", encoding="utf-8") as checkpoint_file:
         return json.load(checkpoint_file)
 
-
+# this bascially weite the checkpoint to the json to keep the teack 
 def _write_checkpoint(year, month, silver_completed=False):
     checkpoint_path = Path(HISTORICAL_CHECKPOINT_FILE)
     checkpoint_path.parent.mkdir(
@@ -104,20 +107,24 @@ def _get_start_month():
         completed_month
     )
 
-
+# main historical controller fucntion which run pipeline for year and month 
 def run_historical():
 
     year, month = _get_start_month()
     completed_months = 0
-
+#if year and month is none means we have completed the historical pipeline for 
+#the this range so we can check if silver pipeline is completed or not if not then we run the silver pipleine 
     if year is None or month is None:
         checkpoint = _read_checkpoint()
+        #this line get the silver status 
         silver_completed = (
             checkpoint
             and checkpoint.get("silver_completed")
         )
 
         if (
+            #if not historicl is false it became true and not silver is flase it became true then run the silver pipline
+            #if historical run silver each month 
             not HISTORICAL_RUN_SILVER_EACH_MONTH
             and not silver_completed
         ):
@@ -191,7 +198,7 @@ def run_historical():
             year,
             month
         )
-
+#done with all the month and if silver was not in run then silver pipeline after all month 
     if completed_months and not HISTORICAL_RUN_SILVER_EACH_MONTH:
         print("=" * 60)
         print("Running Silver pipeline after historical Bronze load")

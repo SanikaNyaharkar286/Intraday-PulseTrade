@@ -7,10 +7,13 @@ BEGIN
     DECLARE records_inserted INT64 DEFAULT 0;
     DECLARE records_rejected INT64 DEFAULT 0;
     DECLARE records_duplicate INT64 DEFAULT 0;
+---store the earlist changed bronze and latest changed 
     DECLARE impacted_start TIMESTAMP;
     DECLARE impacted_end TIMESTAMP;
 
     BEGIN
+    --- create a temp table to check the bronze data for invalid row and reject reasoon
+    ---validate the raw rows 
         CREATE TEMP TABLE bronze_checked AS
         SELECT
             symbol,
@@ -22,6 +25,7 @@ BEGIN
             close,
             volume,
             DATE(timestamp, "Asia/Kolkata") AS trade_date,
+            ---checks for invalid rows and asgin the reject reason
             CASE
                 WHEN symbol IS NULL
                     OR timestamp IS NULL
@@ -47,23 +51,27 @@ BEGIN
                 WHEN TIME(timestamp, "Asia/Kolkata") < TIME "09:15:00"
                     OR TIME(timestamp, "Asia/Kolkata") > TIME "15:30:00"
                     THEN "Outside market hours"
+                --- if nothing match then reject reason will be null and it will be the vaild row 
                 ELSE NULL
             END AS reject_reason
-
+---this is read from the bronze dataset and filter data based on condition 
         FROM `{{PROJECT_ID}}.{{BRONZE_DATASET}}.{{BRONZE_TABLE}}`
         {{BRONZE_SOURCE_FILTER}};
+
+---create a temp table to check bronze data with silver data and reject table to
+--- find the valid and invalid rows 
 
         CREATE TEMP TABLE bronze_candidates AS
         SELECT
             b.*
 
         FROM bronze_checked b
-
+---this check valid bronze data already exit in silver table or not and if it is invalid then check in reject table 
         LEFT JOIN `{{PROJECT_ID}}.{{SILVER_DATASET}}.silver_intraday_1m` s
             ON b.reject_reason IS NULL
             AND s.symbol = b.symbol
             AND s.timestamp = b.timestamp
-
+---check if invalid data already exit in reject or not if not insert 
         LEFT JOIN `{{PROJECT_ID}}.{{SILVER_DATASET}}.silver_rejects` r
             ON b.reject_reason IS NOT NULL
             AND IFNULL(r.symbol, "") = IFNULL(b.symbol, "")
@@ -72,10 +80,12 @@ BEGIN
             AND r.reject_reason = b.reject_reason
 
         WHERE
+        ---filter bronze data based on the condition like date and symbol 
             {{BRONZE_CANDIDATE_FILTER}}
             AND
             (
                 (
+                    ---if row is valid theb check if it is present in silver or not if present then upate the change 
                     b.reject_reason IS NULL
                     AND (
                         s.timestamp IS NULL
@@ -91,17 +101,20 @@ BEGIN
                             != IFNULL(b.volume, -999999999999.0)
                     )
                 )
+                ---if row is invalid then check if it is already present in
+                ---reject table or not if not insert new row 
+                ---The Bronze row is invalid AND this invalid row does not already exist in Rejects.
                 OR (
                     b.reject_reason IS NOT NULL
                     AND r.reject_time IS NULL
                 )
             );
-
+---count how many record 
         SET records_read = (
             SELECT COUNT(*)
             FROM bronze_candidates
         );
-
+---it take only invlaid row and insert into the reject table 
         CREATE TEMP TABLE invalid_rows AS
         SELECT
             IFNULL(trade_date, CURRENT_DATE("Asia/Kolkata")) AS reject_date,
@@ -117,18 +130,20 @@ BEGIN
 
         FROM bronze_candidates
         WHERE reject_reason IS NOT NULL;
-
+---reject row count 
         SET records_rejected = (
             SELECT COUNT(*)
             FROM invalid_rows
         );
-
+---add to the reejct table if it is present then it will not add and if it is not then insert 
+        --- need to comment this logic because we are already checking in bronze_canditate 
         MERGE `{{PROJECT_ID}}.{{SILVER_DATASET}}.silver_rejects` t
         USING invalid_rows s
         ON IFNULL(t.symbol, "") = IFNULL(s.symbol, "")
             AND IFNULL(t.timestamp, DATETIME "0001-01-01 00:00:00")
                 = IFNULL(s.timestamp, DATETIME "0001-01-01 00:00:00")
             AND t.reject_reason = s.reject_reason
+            ---when not matched then insert the row 
         WHEN NOT MATCHED THEN
             INSERT
             (
@@ -156,7 +171,7 @@ BEGIN
                 s.reject_reason,
                 s.reject_time
             );
-
+---this temp table will take only valid row where the reject reason is null 
         CREATE TEMP TABLE valid_updates AS
         SELECT
             * EXCEPT(row_number)
@@ -172,6 +187,7 @@ BEGIN
                 close,
                 volume,
                 trade_date,
+    ---if same symbol timestamp present in bronze then it will take only lastest row 
                 ROW_NUMBER() OVER (
                     PARTITION BY symbol, timestamp
                     ORDER BY bronze_timestamp
@@ -180,28 +196,29 @@ BEGIN
             FROM bronze_candidates
             WHERE reject_reason IS NULL
         )
+        ---take only lastest row for same symbol 
         WHERE row_number = 1;
-
+---valid unique row count 
         SET records_processed = (
             SELECT COUNT(*)
             FROM valid_updates
         );
-
+---count the duplilcate row which is already present in silver table 
         SET records_duplicate = records_read
             - records_rejected
             - records_processed;
-
+---only process the valid updates if there are any records to process 
         IF records_processed > 0 THEN
             SET impacted_start = (
                 SELECT MIN(bronze_timestamp)
                 FROM valid_updates
             );
-
+----impated end is max timestamp same for impacted start is min timestamp
             SET impacted_end = (
                 SELECT MAX(bronze_timestamp)
                 FROM valid_updates
             );
-
+----impatecd symbol unique symbol which present in valid same for trade date 
             CREATE TEMP TABLE impacted_symbols AS
             SELECT DISTINCT symbol
             FROM valid_updates;
@@ -209,7 +226,7 @@ BEGIN
             CREATE TEMP TABLE impacted_dates AS
             SELECT DISTINCT trade_date
             FROM valid_updates;
-
+----create a temp calculate for historical data fro last 100 days
             CREATE TEMP TABLE calc_input AS
             SELECT
                 * EXCEPT(row_number)
@@ -235,6 +252,8 @@ BEGIN
                     ON i.symbol = b.symbol
                 WHERE b.reject_reason IS NULL
                     AND b.bronze_timestamp BETWEEN
+                --- it get data for last 100 days form start date to end date for impacted symbol 
+                 ---beacuse indicator need histroical data to calculate values 
                         TIMESTAMP_SUB(impacted_start, INTERVAL 100 DAY)
                         AND impacted_end
             )
@@ -248,6 +267,7 @@ BEGIN
                         PARTITION BY symbol
                         ORDER BY timestamp
                     ) AS row_number,
+                    --- gets the previous close value for each symbol to calculate returm and gap precentage
                     LAG(close) OVER (
                         PARTITION BY symbol
                         ORDER BY timestamp
@@ -266,6 +286,7 @@ BEGIN
                     open - previous_close,
                     previous_close
                 ) * 100 AS gap_pct,
+                ---sma20 simple moviing avg for last 20 days for each symbol 
                 AVG(close) OVER (
                     PARTITION BY symbol
                     ORDER BY timestamp
@@ -340,6 +361,7 @@ BEGIN
                 ) AS macd_signal
 
             FROM ema_rows;
+---here all the calulated value are joined to create final silver talbe 
 
             CREATE TEMP TABLE silver_rows AS
             SELECT
@@ -376,8 +398,9 @@ BEGIN
                     w.volume,
                     w.avg_volume_20
                 ) AS relative_volume,
+                ---stores the current timestamp when silver updated 
                 CURRENT_TIMESTAMP() AS silver_updated_at
-
+---we have read historical data for last 100 but we only need to update the impacted data in silver 
             FROM windowed_rows w
             INNER JOIN ema_rows e
                 ON e.symbol = w.symbol
@@ -386,7 +409,7 @@ BEGIN
                 ON m.symbol = w.symbol
                 AND m.timestamp = w.timestamp
             WHERE w.bronze_timestamp BETWEEN impacted_start AND impacted_end;
-
+---check how many od the calulated rows are already in silver table 
             SET records_inserted = (
                 SELECT COUNT(*)
                 FROM silver_rows s
@@ -395,7 +418,7 @@ BEGIN
                     AND t.timestamp = s.timestamp
                 WHERE t.timestamp IS NULL
             );
-
+--merge into the silver 1m table 
             MERGE `{{PROJECT_ID}}.{{SILVER_DATASET}}.silver_intraday_1m` t
             USING silver_rows s
             ON t.symbol = s.symbol
@@ -470,11 +493,12 @@ BEGIN
                     s.relative_volume,
                     s.silver_updated_at
                 );
-
+----create a 5min temp table from 1min data 
             CREATE TEMP TABLE base_candles_5m AS
             SELECT
                 trade_date,
                 symbol,
+                ---create the group of timestamp for 5min 
                 DATETIME_ADD(
                     DATETIME_TRUNC(timestamp, HOUR),
                     INTERVAL (5 * DIV(EXTRACT(MINUTE FROM timestamp), 5)) MINUTE
@@ -506,6 +530,7 @@ BEGIN
                 trade_date,
                 symbol,
                 timestamp
+                -- check if we have 5 rw for each 5min candele if not then it will not calculate
             HAVING COUNT(*) = 5;
 
             CREATE TEMP TABLE windowed_5m_rows AS
@@ -732,11 +757,12 @@ BEGIN
                     s.relative_volume,
                     s.silver_updated_at
                 );
-
+---daily intraday data is calculated from 1min data and stored in silver daily dataset
             CREATE TEMP TABLE daily_calc_input AS
             SELECT
                 trade_date,
                 symbol,
+                ---day start time and end time is used to get open and close price fro day 
                 ARRAY_AGG(open ORDER BY timestamp LIMIT 1)[OFFSET(0)] AS open,
                 MAX(high) AS high,
                 MIN(low) AS low,
@@ -768,6 +794,7 @@ BEGIN
             WITH daily_windowed AS (
                 SELECT
                     *,
+                    ---get previous close price for each symbol 
                     LAG(close) OVER (
                         PARTITION BY symbol
                         ORDER BY trade_date
