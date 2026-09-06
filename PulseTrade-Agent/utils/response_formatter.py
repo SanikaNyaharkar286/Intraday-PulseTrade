@@ -14,34 +14,104 @@ Try changing the criteria or timeframe.
         }
 
 
-    df = pd.DataFrame(data)
+    response = {
+        "text": "",
+        "table": None
+    }
 
 
-    text = f"""
-## PulseTrade AI Analysis
+    # -----------------------------
+    # Gemini text response
+    # -----------------------------
 
-**Question analyzed**
+    if isinstance(data, str):
+
+        response["text"] = f"""
+## 📈 PulseTrade AI Analysis
+
+**Question**
+
+{question}
+
+
+**Response**
+
+{data}
+
+
+⚠️ This analysis is based on available market data 
+and should not be considered investment advice.
+"""
+
+        return response
+
+
+
+    # -----------------------------
+    # Dictionary response
+    # -----------------------------
+
+    if isinstance(data, dict):
+
+        response["text"] = data.get(
+            "text",
+            str(data)
+        )
+
+
+        if "data" in data:
+
+            response["table"] = pd.DataFrame(
+                data["data"]
+            )
+
+
+        return response
+
+
+
+    # -----------------------------
+    # BigQuery rows
+    # -----------------------------
+
+    if isinstance(data, list):
+
+        df = pd.DataFrame(data)
+
+
+        response["text"] = f"""
+## 📈 PulseTrade AI Analysis
+
+**Question**
 
 {question}
 
 
 **Observation**
 
-The analysis returned {len(df)} matching records.
-
-The results below are based on historical market data
-available in the semantic layer.
+The analysis returned 
+**{len(df)} matching records**.
 
 
-**Interpretation**
+The results are based on market data 
+available through the PulseTrade semantic layer.
 
-The metrics indicate observed market behavior.
-They should be considered historical observations
-and not investment recommendations.
+
+⚠️ This is historical market analysis and 
+not investment advice.
 """
 
 
-    return {
-        "text": text,
-        "table": df
-    }
+        response["table"] = df
+
+        return response
+
+
+
+    # -----------------------------
+    # Fallback
+    # -----------------------------
+
+    response["text"] = str(data)
+
+    return response
